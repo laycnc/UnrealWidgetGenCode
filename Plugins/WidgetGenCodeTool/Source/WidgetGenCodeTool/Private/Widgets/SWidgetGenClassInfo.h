@@ -105,9 +105,6 @@ private:
 	/** Handler for when the text in the class name edit box has changed */
 	void OnClassNameTextChanged(const FText& NewText);
 
-	/** Handler for when the text in the class name edit box is committed */
-	void OnClassNameTextCommitted(const FText& NewText, ETextCommit::Type CommitType);
-
 	/** Returns the text in the class path edit box */
 	FText OnGetClassPathText() const;
 
@@ -119,12 +116,6 @@ private:
 
 	/** Returns the text for the calculated source file name */
 	FText OnGetClassSourceFileText() const;
-
-	/** Returns true if Finish is allowed */
-	bool CanFinish() const;
-
-	/** Handler for when finish is clicked */
-	void FinishClicked();
 
 	/** Handler for when the "Choose Folder" button is clicked */
 	FReply HandleChooseFolderButtonClicked();

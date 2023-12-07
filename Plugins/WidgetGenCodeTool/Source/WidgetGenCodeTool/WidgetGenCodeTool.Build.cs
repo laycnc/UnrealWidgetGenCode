@@ -6,6 +6,7 @@ public class WidgetGenCodeTool : ModuleRules
 {
 	public WidgetGenCodeTool(ReadOnlyTargetRules Target) : base(Target)
 	{
+		OptimizeCode = CodeOptimization.Never;
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		PublicIncludePaths.AddRange(
@@ -45,6 +46,9 @@ public class WidgetGenCodeTool : ModuleRules
 				"MainFrame",
 				"EngineSettings",
 				"GameProjectGeneration",
+				"Documentation",
+				"AppFramework",
+				"ToolWidgets",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

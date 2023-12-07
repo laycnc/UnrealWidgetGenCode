@@ -13,6 +13,8 @@
 #include "Blueprint/WidgetTree.h"
 #include "Animation/WidgetAnimation.h"
 
+#include "WidgetGenCodeProjectUtils.h"
+
 #define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
 void FWidgetGenCodeToolModule::StartupModule()
@@ -69,8 +71,8 @@ void FWidgetGenCodeToolModule::OnToolBarExtension(FToolBarBuilder& InBuilder, UW
 	{
 		//InBuilder.AddToolBarButton(FWidgetGenCodeToolCommands::Get().PluginAction);
 		InBuilder.AddToolBarButton(
-			FUIAction(FExecuteAction::CreateRaw(this, &FWidgetGenCodeToolModule::OnPluginAction, InBlueprint)), 
-			NAME_None, 
+			FUIAction(FExecuteAction::CreateRaw(this, &FWidgetGenCodeToolModule::OnPluginAction, InBlueprint)),
+			NAME_None,
 			LOCTEXT("OpenDialog", "Open Dialog"));
 	}
 	InBuilder.EndSection();
@@ -78,27 +80,6 @@ void FWidgetGenCodeToolModule::OnToolBarExtension(FToolBarBuilder& InBuilder, UW
 
 void FWidgetGenCodeToolModule::OnPluginAction(UWidgetBlueprint* InBlueprint)
 {
-	UClass* Class = InBlueprint->GeneratedClass;
-
-	TArray<FObjectProperty*> Propertys;
-	for (FObjectProperty* Property : TFieldRange<FObjectProperty>(Class, EFieldIterationFlags::None))
-	{
-		const FName PropertyName = Property->GetFName();
-
-		if (UWidget* Widget = InBlueprint->WidgetTree->FindWidget(PropertyName))
-		{
-			Propertys.Add(Property);
-		}
-
-		for (auto Animation : InBlueprint->Animations)
-		{
-			if (Animation->GetFName() == PropertyName)
-			{
-				Propertys.Add(Property);
-			}
-		}
-	}
-
 	// If we've been given a class then we only show the second page of the dialog, so we can make the window smaller as that page doesn't have as much content
 	const FVector2D WindowSize = FVector2D(940, 480);
 
@@ -109,7 +90,8 @@ void FWidgetGenCodeToolModule::OnPluginAction(UWidgetBlueprint* InBlueprint)
 		.Title(WindowTitle)
 		.ClientSize(WindowSize)
 		.SizingRule(ESizingRule::FixedSize)
-		.SupportsMinimize(false).SupportsMaximize(false);
+		.SupportsMinimize(false)
+		.SupportsMaximize(false);
 
 	TSharedRef<SWidgetGenCodeToolDialog> NewClassDialog =
 		SNew(SWidgetGenCodeToolDialog);
