@@ -74,9 +74,6 @@ public:
 			name to be the inherited class name.  Note that DefaultClassPrefix is still prepended to this name, if non-empty. */
 		SLATE_ARGUMENT(FString, DefaultClassName)
 
-		/** Event called when code is successfully added to the project */
-		SLATE_EVENT(FOnAddedToProject, OnAddedToProject)
-
 	SLATE_END_ARGS()
 
 	/** Constructs this widget with InArgs */
@@ -140,9 +137,6 @@ private:
 	/** Checks the current class name/path for validity and updates cached values accordingly */
 	void UpdateInputValidity();
 
-	/** Closes the window that contains this widget */
-	void CloseContainingWindow();
-
 private:
 
 	/** The prefix to put on new classes by default, if the user doesn't type in a new name.  Defaults to 'My'. */
@@ -200,6 +194,4 @@ private:
 	/** Information about the currently selected module; used for class validation */
 	TSharedPtr<FModuleContextInfo> SelectedModuleInfo;
 
-	/** Event called when code is succesfully added to the project */
-	FOnAddedToProject OnAddedToProject;
 };

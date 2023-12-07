@@ -164,8 +164,6 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 
 	const float EditableTextHeight = 26.0f;
 
-	OnAddedToProject = InArgs._OnAddedToProject;
-
 	ChildSlot
 		[
 			SNew(SVerticalBox)
@@ -705,16 +703,6 @@ void SWidgetGenClassInfo::UpdateInputValidity()
 
 	// Since this function was invoked, periodic validity checks should be re-enabled if they were disabled.
 	bPreventPeriodicValidityChecksUntilNextChange = false;
-}
-
-void SWidgetGenClassInfo::CloseContainingWindow()
-{
-	TSharedPtr<SWindow> ContainingWindow = FSlateApplication::Get().FindWidgetWindow(AsShared());
-
-	if (ContainingWindow.IsValid())
-	{
-		ContainingWindow->RequestDestroyWindow();
-	}
 }
 
 #undef LOCTEXT_NAMESPACE
