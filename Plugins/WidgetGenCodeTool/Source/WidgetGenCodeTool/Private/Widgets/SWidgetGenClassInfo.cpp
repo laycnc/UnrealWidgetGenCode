@@ -248,6 +248,9 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 														.Visibility(EVisibility::Visible)
 														.OnValueChanged(this, &SWidgetGenClassInfo::OnClassLocationChanged)
 														.Value(this, &SWidgetGenClassInfo::IsClassLocationActive)
+														+ SSegmentedControl<GameProjectUtils::EClassLocation>::Slot(GameProjectUtils::EClassLocation::Classes)
+														.Text(LOCTEXT("Classes", "Classes"))
+														.ToolTip(LOCTEXT("ClassLocation_Classes", "A Classes class can be included and used inside other modules in addition to the module it resides in"))
 														+ SSegmentedControl<GameProjectUtils::EClassLocation>::Slot(GameProjectUtils::EClassLocation::Public)
 														.Text(LOCTEXT("Public", "Public"))
 														.ToolTip(LOCTEXT("ClassLocation_Public", "A public class can be included and used inside other modules in addition to the module it resides in"))
@@ -607,40 +610,41 @@ void SWidgetGenClassInfo::OnClassLocationChanged(GameProjectUtils::EClassLocatio
 	GameProjectUtils::GetClassLocation(AbsoluteClassPath, *SelectedModuleInfo, TmpClassLocation);
 
 	const FString RootPath = SelectedModuleInfo->ModuleSourcePath;
+	const FString ClassesPath = RootPath / "Classes" / "";		// Ensure trailing /
 	const FString PublicPath = RootPath / "Public" / "";		// Ensure trailing /
 	const FString PrivatePath = RootPath / "Private" / "";		// Ensure trailing /
+
+	auto SetNewClassPath = [&](const FString& InNewClassPath, const FString& InOtherPath1, const FString& InOtherPath2)
+		{
+			if (AbsoluteClassPath.StartsWith(InOtherPath1))
+			{
+				NewClassPath = AbsoluteClassPath.Replace(*InOtherPath1, *InNewClassPath);
+			}
+			else if (AbsoluteClassPath.StartsWith(InOtherPath2))
+			{
+				NewClassPath = AbsoluteClassPath.Replace(*InOtherPath2, *InNewClassPath);
+			}
+			else if (AbsoluteClassPath.StartsWith(RootPath))
+			{
+				NewClassPath = AbsoluteClassPath.Replace(*RootPath, *InNewClassPath);
+			}
+			else
+			{
+				NewClassPath = InNewClassPath;
+			}
+		};
 
 	// Update the class path to be rooted to the Public or Private folder based on InVisibility
 	switch (InLocation)
 	{
-	case GameProjectUtils::EClassLocation::Public:
-		if (AbsoluteClassPath.StartsWith(PrivatePath))
-		{
-			NewClassPath = AbsoluteClassPath.Replace(*PrivatePath, *PublicPath);
-		}
-		else if (AbsoluteClassPath.StartsWith(RootPath))
-		{
-			NewClassPath = AbsoluteClassPath.Replace(*RootPath, *PublicPath);
-		}
-		else
-		{
-			NewClassPath = PublicPath;
-		}
+	case GameProjectUtils::EClassLocation::Classes:
+		SetNewClassPath(ClassesPath, PrivatePath, PublicPath);
 		break;
-
+	case GameProjectUtils::EClassLocation::Public:
+		SetNewClassPath(PublicPath, PrivatePath, ClassesPath);
+		break;
 	case GameProjectUtils::EClassLocation::Private:
-		if (AbsoluteClassPath.StartsWith(PublicPath))
-		{
-			NewClassPath = AbsoluteClassPath.Replace(*PublicPath, *PrivatePath);
-		}
-		else if (AbsoluteClassPath.StartsWith(RootPath))
-		{
-			NewClassPath = AbsoluteClassPath.Replace(*RootPath, *PrivatePath);
-		}
-		else
-		{
-			NewClassPath = PrivatePath;
-		}
+		SetNewClassPath(PrivatePath, PublicPath, ClassesPath);
 		break;
 
 	default:
@@ -657,9 +661,8 @@ void SWidgetGenClassInfo::UpdateInputValidity()
 
 	// Validate the path first since this has the side effect of updating the UI
 	bLastInputValidityCheckSuccessful = GameProjectUtils::CalculateSourcePaths(NewClassPath, *SelectedModuleInfo, CalculatedClassHeaderName, CalculatedClassSourceName, &LastInputValidityErrorText);
-	//CalculatedClassHeaderName /= ParentClassInfo.GetHeaderFilename(NewClassName);
-	//CalculatedClassSourceName /= ParentClassInfo.GetSourceFilename(NewClassName);
-	// todo:takeshot
+	CalculatedClassHeaderName /= (NewClassName + TEXT(".h"));
+	CalculatedClassSourceName /= (NewClassName + TEXT(".cpp"));
 
 	// If the source paths check as succeeded, check to see if we're using a Public/Private class
 	if (bLastInputValidityCheckSuccessful)
@@ -667,7 +670,7 @@ void SWidgetGenClassInfo::UpdateInputValidity()
 		GameProjectUtils::GetClassLocation(NewClassPath, *SelectedModuleInfo, ClassLocation);
 
 		// We only care about the Public and Private folders
-		if (ClassLocation != GameProjectUtils::EClassLocation::Public && ClassLocation != GameProjectUtils::EClassLocation::Private)
+		if (ClassLocation != GameProjectUtils::EClassLocation::Public && ClassLocation != GameProjectUtils::EClassLocation::Private && ClassLocation != GameProjectUtils::EClassLocation::Classes)
 		{
 			ClassLocation = GameProjectUtils::EClassLocation::UserDefined;
 		}
