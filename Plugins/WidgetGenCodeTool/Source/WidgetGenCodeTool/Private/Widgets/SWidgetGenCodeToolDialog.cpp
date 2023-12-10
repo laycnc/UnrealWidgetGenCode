@@ -16,13 +16,25 @@
 
 #include "Widgets/SWidgetGenClassInfo.h"
 
-#include "Widgets/SModuleSelecter.h"
+#include "GameProjectUtils.h"
+#include "ContentBrowserModule.h"
 #include "SourceCodeNavigation.h"
+#include "Widgets/SModuleSelecter.h"
+#include "IContentBrowserSingleton.h"
+#include "Interfaces/IProjectManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "WidgetBlueprint.h"
 
 #define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
 void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 {
+	OnAddedToProject = InArgs._OnAddedToProject;
+	WeakWidgetBlueprint = InArgs._WidgetBlueprint;
+	BaseClassInfo = InArgs._BaseClassInfo;
+	ImplmentClassInfo = InArgs._ImplmentClassInfo;
+
 	ChildSlot
 		[
 			SNew(SBorder)
@@ -47,6 +59,7 @@ void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 								//	.OnEnter(this, &SWidgetGenCodeToolDialog::OnNamePageEntered)
 								[
 									SNew(SWidgetGenClassInfo)
+									.ClassInfo(BaseClassInfo)
 								]
 
 								// Name class
@@ -54,6 +67,7 @@ void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 								//	.OnEnter(this, &SWidgetGenCodeToolDialog::OnNamePageEntered)
 								[
 									SNew(SWidgetGenClassInfo)
+									.ClassInfo(ImplmentClassInfo)
 								]
 						]
 				]
@@ -86,30 +100,34 @@ bool SWidgetGenCodeToolDialog::CanFinish() const
 #if 0
 	return bLastInputValidityCheckSuccessful && ParentClassInfo.IsSet() && FSourceCodeNavigation::IsCompilerAvailable();
 #else
-	return false;
+	return true;
 #endif
 }
 
 /** Handler for when finish is clicked */
 void SWidgetGenCodeToolDialog::FinishClicked()
 {
-#if 0
 	check(CanFinish());
 
+	if (!WeakWidgetBlueprint.IsValid())
+	{
+		return;
+	}
 
+}
+
+void SWidgetGenCodeToolDialog::CreateSourceCode(const FString& InNewClassName, const FString& InNewClassPath, const FModuleContextInfo& InSelectModule, const FNewClassInfo& InParentClassInfo)
+{
 	FString HeaderFilePath;
 	FString CppFilePath;
-
-	// Track the selected module name so we can default to this next time
-	LastSelectedModuleName = SelectedModuleInfo->ModuleName;
 
 	GameProjectUtils::EReloadStatus ReloadStatus;
 	FText FailReason;
 	const TSet<FString>& DisallowedHeaderNames = FSourceCodeNavigation::GetSourceFileDatabase().GetDisallowedHeaderNames();
-	const GameProjectUtils::EAddCodeToProjectResult AddCodeResult = GameProjectUtils::AddCodeToProject(NewClassName, NewClassPath, *SelectedModuleInfo, ParentClassInfo, DisallowedHeaderNames, HeaderFilePath, CppFilePath, FailReason, ReloadStatus);
+	const GameProjectUtils::EAddCodeToProjectResult AddCodeResult = GameProjectUtils::AddCodeToProject(InNewClassName, InNewClassPath, InSelectModule, InParentClassInfo, DisallowedHeaderNames, HeaderFilePath, CppFilePath, FailReason, ReloadStatus);
 	if (AddCodeResult == GameProjectUtils::EAddCodeToProjectResult::Succeeded)
 	{
-		OnAddedToProject.ExecuteIfBound(NewClassName, NewClassPath, SelectedModuleInfo->ModuleName);
+		OnAddedToProject.ExecuteIfBound(InNewClassName, InNewClassPath, InSelectModule.ModuleName);
 
 		// Reload current project to take into account any new state
 		IProjectManager::Get().LoadProjectFile(FPaths::GetProjectFilePath());
@@ -122,7 +140,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 
 		if (bWasReloaded)
 		{
-			FNotificationInfo Notification(FText::Format(LOCTEXT("AddedClassSuccessNotification", "Added new class {0}"), FText::FromString(NewClassName)));
+			FNotificationInfo Notification(FText::Format(LOCTEXT("AddedClassSuccessNotification", "Added new class {0}"), FText::FromString(InNewClassName)));
 			FSlateNotificationManager::Get().AddNotification(Notification);
 		}
 
@@ -133,7 +151,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 				// Code successfully added, notify the user. We are either running on a platform that does not support source access or a file was not given so don't ask about editing the file
 				const FText Message = FText::Format(
 					LOCTEXT("AddCodeSuccessWithHotReload", "Successfully added class '{0}', however you must recompile the '{1}' module before it will appear in the Content Browser.")
-					, FText::FromString(NewClassName), FText::FromString(SelectedModuleInfo->ModuleName));
+					, FText::FromString(InNewClassName), FText::FromString(InSelectModule.ModuleName));
 				FMessageDialog::Open(EAppMsgType::Ok, Message);
 			}
 			else
@@ -154,7 +172,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 				// Code successfully added, notify the user and ask about opening the IDE now
 				const FText Message = FText::Format(
 					LOCTEXT("AddCodeSuccessWithHotReloadAndSync", "Successfully added class '{0}', however you must recompile the '{1}' module before it will appear in the Content Browser.\n\nWould you like to edit the code now?")
-					, FText::FromString(NewClassName), FText::FromString(SelectedModuleInfo->ModuleName));
+					, FText::FromString(InNewClassName), FText::FromString(InSelectModule.ModuleName));
 				bEditSourceFilesNow = (FMessageDialog::Open(EAppMsgType::YesNo, Message) == EAppReturnType::Yes);
 			}
 
@@ -169,10 +187,10 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		}
 
 		// Sync the content browser to the new class
-		UPackage* const ClassPackage = FindPackage(nullptr, *(FString("/Script/") + SelectedModuleInfo->ModuleName));
+		UPackage* const ClassPackage = FindPackage(nullptr, *(FString("/Script/") + InSelectModule.ModuleName));
 		if (ClassPackage)
 		{
-			UClass* const NewClass = static_cast<UClass*>(FindObjectWithOuter(ClassPackage, UClass::StaticClass(), *NewClassName));
+			UClass* const NewClass = static_cast<UClass*>(FindObjectWithOuter(ClassPackage, UClass::StaticClass(), *InNewClassName));
 			if (NewClass)
 			{
 				TArray<UObject*> SyncAssets;
@@ -187,7 +205,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 	}
 	else if (AddCodeResult == GameProjectUtils::EAddCodeToProjectResult::FailedToHotReload)
 	{
-		OnAddedToProject.ExecuteIfBound(NewClassName, NewClassPath, SelectedModuleInfo->ModuleName);
+		OnAddedToProject.ExecuteIfBound(InNewClassName, InNewClassPath, InSelectModule.ModuleName);
 
 		// Prevent periodic validity checks. This is to prevent a brief error message about the class already existing while you are exiting.
 		bPreventPeriodicValidityChecksUntilNextChange = true;
@@ -195,7 +213,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		// Failed to compile new code
 		const FText Message = FText::Format(
 			LOCTEXT("AddCodeFailed_HotReloadFailed", "Successfully added class '{0}', however you must recompile the '{1}' module before it will appear in the Content Browser. {2}\n\nWould you like to open the Output Log to see more details?")
-			, FText::FromString(NewClassName), FText::FromString(SelectedModuleInfo->ModuleName), FailReason);
+			, FText::FromString(InNewClassName), FText::FromString(InSelectModule.ModuleName), FailReason);
 		if (FMessageDialog::Open(EAppMsgType::YesNo, Message) == EAppReturnType::Yes)
 		{
 			FGlobalTabmanager::Get()->TryInvokeTab(FName("OutputLog"));
@@ -208,10 +226,9 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 	{
 		// @todo show fail reason in error label
 		// Failed to add code
-		const FText Message = FText::Format(LOCTEXT("AddCodeFailed_AddCodeFailed", "Failed to add class '{0}'. {1}"), FText::FromString(NewClassName), FailReason);
+		const FText Message = FText::Format(LOCTEXT("AddCodeFailed_AddCodeFailed", "Failed to add class '{0}'. {1}"), FText::FromString(InNewClassName), FailReason);
 		FMessageDialog::Open(EAppMsgType::Ok, Message);
 	}
-#endif
 }
 
 /** Closes the window that contains this widget */

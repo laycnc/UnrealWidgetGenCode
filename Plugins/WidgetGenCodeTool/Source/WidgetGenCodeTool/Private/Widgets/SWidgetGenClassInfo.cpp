@@ -76,25 +76,20 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 		}
 
 		Algo::SortBy(AvailableModules, &FModuleContextInfo::ModuleName);
-	}
 
-	// If we've been given an initial path that maps to a valid project module, use that as our initial module and path
+		NewClassName = InArgs._ClassInfo.ClassName;
+		NewClassPath = InArgs._ClassInfo.ClassPath;
 
-	if (!InArgs._InitialPath.IsEmpty())
-	{
-		const FString AbsoluteInitialPath = FPaths::ConvertRelativePathToFull(InArgs._InitialPath);
 		for (const auto& AvailableModule : AvailableModules)
 		{
-			if (AbsoluteInitialPath.StartsWith(AvailableModule->ModuleSourcePath))
+			if (InArgs._ClassInfo.ClassModule.ModuleName == AvailableModule->ModuleName)
 			{
 				SelectedModuleInfo = AvailableModule;
-				NewClassPath = AbsoluteInitialPath;
 				break;
 			}
 		}
 	}
 
-	DefaultClassPrefix = InArgs._DefaultClassPrefix;
 	DefaultClassName = InArgs._DefaultClassName;
 
 	// If we didn't get given a valid path override (see above), try and automatically work out the best default module
@@ -428,12 +423,6 @@ void SWidgetGenClassInfo::Tick(const FGeometry& AllottedGeometry, const double I
 	}
 }
 
-FText SWidgetGenClassInfo::GetSelectedParentClassName() const
-{
-	return FText::FromString(FString(TEXT("Test")));
-	//return ParentClassInfo.IsSet() ? ParentClassInfo.GetClassName() : FText::GetEmpty();
-}
-
 FString GetClassHeaderPath(const UClass* Class)
 {
 	if (Class)
@@ -464,14 +453,6 @@ FText SWidgetGenClassInfo::GetNameErrorLabelText() const
 
 FText SWidgetGenClassInfo::GetNameClassTitle() const
 {
-	static const FString NoneString = TEXT("None");
-
-	const FText ParentClassName = GetSelectedParentClassName();
-	if (!ParentClassName.IsEmpty() && ParentClassName.ToString() != NoneString)
-	{
-		return FText::Format(LOCTEXT("NameClassTitle", "Name Your New {0}"), ParentClassName);
-	}
-
 	return LOCTEXT("NameClassGenericTitle", "Name Your New Class");
 }
 

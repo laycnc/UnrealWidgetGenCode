@@ -25,7 +25,8 @@
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/SCompoundWidget.h"
-#include "Widgets/Views/SListView.h"
+#include "WidgetGenCodeProjectUtils.h"
+
 
 class IClassViewerFilter;
 class ITableRow;
@@ -64,15 +65,11 @@ public:
 		/** The class we want to build our new class from. If this is not specified then the wizard will display classes to the user. */
 		SLATE_ARGUMENT(const UClass*, Class)
 
-		/** The initial path to use as the destination for the new class. If this is not specified, we will work out a suitable default from the available project modules */
-		SLATE_ARGUMENT(FString, InitialPath)
-
-		/** The prefix to put on new classes by default, if the user doesn't type in a new name.  Defaults to 'My'. */
-		SLATE_ARGUMENT(FString, DefaultClassPrefix)
-
 		/** If non-empty, overrides the default name of the class, when the user doesn't type a new name.  Defaults to empty, which causes the
 			name to be the inherited class name.  Note that DefaultClassPrefix is still prepended to this name, if non-empty. */
 		SLATE_ARGUMENT(FString, DefaultClassName)
+
+		SLATE_ARGUMENT(FWidgetGenClassInfomation, ClassInfo)
 
 	SLATE_END_ARGS()
 
@@ -82,10 +79,6 @@ public:
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
 private:
-
-
-	/** Gets the currently selected parent class name */
-	FText GetSelectedParentClassName() const;
 
 	/** Gets the visibility of the name error label */
 	EVisibility GetNameErrorLabelVisibility() const;
@@ -138,9 +131,6 @@ private:
 	void UpdateInputValidity();
 
 private:
-
-	/** The prefix to put on new classes by default, if the user doesn't type in a new name.  Defaults to 'My'. */
-	FString DefaultClassPrefix;
 
 	/** If non-empty, overrides the default name of the class, when the user doesn't type a new name.  Defaults to empty, which causes the
 		name to be the inherited class name.  Note that DefaultClassPrefix is still prepended to this name, if non-empty. */

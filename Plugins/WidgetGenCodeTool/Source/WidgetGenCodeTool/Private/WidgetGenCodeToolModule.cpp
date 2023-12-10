@@ -80,6 +80,14 @@ void FWidgetGenCodeToolModule::OnToolBarExtension(FToolBarBuilder& InBuilder, UW
 
 void FWidgetGenCodeToolModule::OnPluginAction(UWidgetBlueprint* InBlueprint)
 {
+	FWidgetGenClassInfomation BaseClassInfo;
+	FWidgetGenClassInfomation ImplmentClassInfo;
+
+	if (!WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(InBlueprint, BaseClassInfo, ImplmentClassInfo))
+	{
+		return;
+	}
+
 	// If we've been given a class then we only show the second page of the dialog, so we can make the window smaller as that page doesn't have as much content
 	const FVector2D WindowSize = FVector2D(940, 480);
 
@@ -94,7 +102,11 @@ void FWidgetGenCodeToolModule::OnPluginAction(UWidgetBlueprint* InBlueprint)
 		.SupportsMaximize(false);
 
 	TSharedRef<SWidgetGenCodeToolDialog> NewClassDialog =
-		SNew(SWidgetGenCodeToolDialog);
+		SNew(SWidgetGenCodeToolDialog)
+		.WidgetBlueprint(InBlueprint)
+		.BaseClassInfo(BaseClassInfo)
+		.ImplmentClassInfo(ImplmentClassInfo)
+		;
 
 	AddCodeWindow->SetContent(NewClassDialog);
 

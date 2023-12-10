@@ -49,6 +49,7 @@ public class WidgetGenCodeTool : ModuleRules
 				"Documentation",
 				"AppFramework",
 				"ToolWidgets",
+				"ContentBrowser",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
