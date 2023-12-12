@@ -24,7 +24,6 @@
 
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
-#include "FeaturedClasses.inl"
 #include "Editor.h"
 #include "Styling/StyleColors.h"
 #include "Widgets/Input/SSegmentedControl.h"
@@ -90,8 +89,6 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 		}
 	}
 
-	DefaultClassName = InArgs._DefaultClassName;
-
 	// If we didn't get given a valid path override (see above), try and automatically work out the best default module
 	// If we have a runtime module with the same name as our project, then use that
 	// Otherwise, set out default target module as the first runtime module in the list
@@ -147,8 +144,6 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 	}
 
 	ClassLocation = GameProjectUtils::EClassLocation::UserDefined; // the first call to UpdateInputValidity will set this correctly based on NewClassPath
-
-	ParentClassInfo = FNewClassInfo(InArgs._Class);
 
 	LastPeriodicValidityCheckTime = 0;
 	PeriodicValidityCheckFrequency = 4;
@@ -666,21 +661,6 @@ void SWidgetGenClassInfo::UpdateInputValidity()
 	{
 		const TSet<FString>& DisallowedHeaderNames = FSourceCodeNavigation::GetSourceFileDatabase().GetDisallowedHeaderNames();
 		bLastInputValidityCheckSuccessful = GameProjectUtils::IsValidClassNameForCreation(NewClassName, *SelectedModuleInfo, DisallowedHeaderNames, LastInputValidityErrorText);
-	}
-
-	// Validate that the class is valid for the currently selected module
-	// As a project can have multiple modules, this lets us update the class validity as the user changes the target module
-	if (bLastInputValidityCheckSuccessful && ParentClassInfo.BaseClass)
-	{
-		bLastInputValidityCheckSuccessful = GameProjectUtils::IsValidBaseClassForCreation(ParentClassInfo.BaseClass, *SelectedModuleInfo);
-		if (!bLastInputValidityCheckSuccessful)
-		{
-			LastInputValidityErrorText = FText::Format(
-				LOCTEXT("NewClassError_InvalidBaseClassForModule", "{0} cannot be used as a base class in the {1} module. Please make sure that {0} is API exported."),
-				FText::FromString(ParentClassInfo.BaseClass->GetName()),
-				FText::FromString(SelectedModuleInfo->ModuleName)
-			);
-		}
 	}
 
 	LastPeriodicValidityCheckTime = FSlateApplication::Get().GetCurrentTime();

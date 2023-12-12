@@ -48,26 +48,11 @@ enum class EClassDomain : uint8 { Blueprint, Native };
  */
 class SWidgetGenClassInfo : public SCompoundWidget
 {
+	using FOnClassInfoChanged = typename TSlateDelegates< TSharedPtr<FModuleContextInfo> >::FOnSelectionChanged;
 public:
 	SLATE_BEGIN_ARGS(SWidgetGenClassInfo)
-		: _Class(nullptr)
+		: _ClassInfo()
 		{}
-
-		/** A reference to the parent window */
-		SLATE_ARGUMENT(TSharedPtr<SWindow>, ParentWindow)
-
-		/** An array of classes to feature on the class picker page */
-		SLATE_ARGUMENT(TArray<FNewClassInfo>, FeaturedClasses)
-
-		/** Filter specifying allowable class types, if a parent class is to be chosen by the user */
-		SLATE_ARGUMENT(TSharedPtr<IClassViewerFilter>, ClassViewerFilter)
-
-		/** The class we want to build our new class from. If this is not specified then the wizard will display classes to the user. */
-		SLATE_ARGUMENT(const UClass*, Class)
-
-		/** If non-empty, overrides the default name of the class, when the user doesn't type a new name.  Defaults to empty, which causes the
-			name to be the inherited class name.  Note that DefaultClassPrefix is still prepended to this name, if non-empty. */
-		SLATE_ARGUMENT(FString, DefaultClassName)
 
 		SLATE_ARGUMENT(FWidgetGenClassInfomation, ClassInfo)
 
@@ -132,10 +117,6 @@ private:
 
 private:
 
-	/** If non-empty, overrides the default name of the class, when the user doesn't type a new name.  Defaults to empty, which causes the
-		name to be the inherited class name.  Note that DefaultClassPrefix is still prepended to this name, if non-empty. */
-	FString DefaultClassName;
-
 	/** The editable text box to enter the current name */
 	TSharedPtr<SEditableTextBox> ClassNameEditBox;
 
@@ -156,9 +137,6 @@ private:
 
 	/** The calculated name of the generated source file for this class */
 	FString CalculatedClassSourceName;
-
-	/** The selected parent class */
-	FNewClassInfo ParentClassInfo;
 
 	/** The last time that the class name/path was checked for validity. This is used to throttle I/O requests to a reasonable frequency */
 	double LastPeriodicValidityCheckTime;
