@@ -1,0 +1,33 @@
+%COPYRIGHT_LINE%
+
+%PCH_INCLUDE_DIRECTIVE%
+%MY_HEADER_INCLUDE_DIRECTIVE%
+%ADDITIONAL_INCLUDE_DIRECTIVES%
+
+
+%PREFIXED_CLASS_NAME%::%PREFIXED_CLASS_NAME%(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+bool %PREFIXED_CLASS_NAME%::Initialize()
+{
+	const bool Result = Super::Initialize();
+
+	const auto SetProperty = [this](FName PropertyName, auto& InitMember)
+		{
+			if (FObjectProperty* Property = FindFProperty<FObjectProperty>(GetClass(), PropertyName))
+			{
+				using WeakType = typename TRemoveReference<decltype(InitMember)>::Type;
+				using Type = typename WeakType::ElementType;
+				UObject* Obj = Property->GetObjectPropertyValue_InContainer(this);
+				Type* Value = Cast<Type>(Obj);
+				InitMember = Value;
+			}
+		};
+
+	
+	%CLASS_MEMBER_INITIALIZED%
+
+	return Result;
+}
