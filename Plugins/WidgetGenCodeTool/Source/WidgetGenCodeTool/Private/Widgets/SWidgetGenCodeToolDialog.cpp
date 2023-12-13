@@ -1,17 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Widgets/SWidgetGenCodeToolDialog.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SGridPanel.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Input/SCheckBox.h"
-#include "Widgets/Input/SSegmentedControl.h"
-#include "Widgets/SBoxPanel.h"
 #include "Widgets/Workflow/SWizard.h"
-#include "SWarningOrErrorBox.h"
 
 #include "ModuleDescriptor.h"
-#include "GameProjectUtils.h"
 #include "TutorialMetaData.h"
 
 #include "Widgets/SWidgetGenClassInfo.h"
@@ -25,6 +17,7 @@
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "WidgetBlueprint.h"
+#include "WidgetGenCodeProjectUtils.h"
 
 #define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
@@ -32,8 +25,8 @@ void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 {
 	OnAddedToProject = InArgs._OnAddedToProject;
 	WeakWidgetBlueprint = InArgs._WidgetBlueprint;
-	BaseClassInfo = InArgs._BaseClassInfo;
-	ImplmentClassInfo = InArgs._ImplmentClassInfo;
+	BaseClassInfo = MakeShared<FWidgetGenClassInfomation>(InArgs._BaseClassInfo);
+	ImplmentClassInfo = MakeShared<FWidgetGenClassInfomation>(InArgs._ImplmentClassInfo);
 
 	ChildSlot
 		[
@@ -55,11 +48,11 @@ void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 								.OnFinished(this, &SWidgetGenCodeToolDialog::FinishClicked)
 
 								// Name class
-								+SWizard::Page()
+								+ SWizard::Page()
 								//	.OnEnter(this, &SWidgetGenCodeToolDialog::OnNamePageEntered)
 								[
 									SNew(SWidgetGenClassInfo)
-									.ClassInfo(BaseClassInfo)
+										.ClassInfo(BaseClassInfo)
 								]
 
 								// Name class
@@ -67,7 +60,7 @@ void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 								//	.OnEnter(this, &SWidgetGenCodeToolDialog::OnNamePageEntered)
 								[
 									SNew(SWidgetGenClassInfo)
-									.ClassInfo(ImplmentClassInfo)
+										.ClassInfo(ImplmentClassInfo)
 								]
 						]
 				]
@@ -75,7 +68,7 @@ void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 }
 
 /** Interpret Escape and Enter key press as Cancel or double-click/Next */
-FReply SWidgetGenCodeToolDialog::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) 
+FReply SWidgetGenCodeToolDialog::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
 {
 	if (InKeyEvent.GetKey() == EKeys::Escape)
 	{
@@ -114,6 +107,48 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		return;
 	}
 
+	TArray<FObjectProperty*> Propertys;
+	TArray<UClass*> PropertyClasses;
+	TArray<FString> PropertyHeaderFiles;
+
+	WidgetGenCodeProjectUtils::GetPropertyInfos(WeakWidgetBlueprint.Get(), Propertys, PropertyClasses, PropertyHeaderFiles);
+
+	// クラスのプロパティをメンバーを初期化
+	FString ClassProperties;
+	for (const FObjectProperty* Property : Propertys)
+	{
+		ClassProperties += FString::Printf(TEXT("\tTWeakObjectPtr<U%s> %s;\r\n"),
+			*Property->PropertyClass->GetName(),
+			*Property->GetName()
+			);
+	}
+
+	// クラスのプロパティをメンバーを初期化
+	FString ClassForwardDeclaration;
+	for (const UClass* PropertyClass : PropertyClasses)
+	{
+		ClassForwardDeclaration += FString::Printf(TEXT("class U%s;\r\n"), *PropertyClass->GetName());
+	}
+
+	int A = 9;
+
+#if 1
+
+	TArray<FString> ClassSpecifierList;
+
+	FString SyncLocation;
+	FText FailReason;
+
+	WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
+		*BaseClassInfo,
+		FNewClassInfo(WeakWidgetBlueprint->ParentClass),
+		ClassSpecifierList,
+		ClassProperties,
+		ClassForwardDeclaration,
+		SyncLocation,
+		FailReason
+	);
+#endif
 }
 
 void SWidgetGenCodeToolDialog::CreateSourceCode(const FString& InNewClassName, const FString& InNewClassPath, const FModuleContextInfo& InSelectModule, const FNewClassInfo& InParentClassInfo)

@@ -8,6 +8,9 @@
 #include "Blueprint/WidgetTree.h"
 #include "Animation/WidgetAnimation.h"
 #include "SourceCodeNavigation.h"
+#include "PluginBlueprintLibrary.h"
+
+#define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
 namespace
 {
@@ -90,6 +93,38 @@ namespace
 
 		return Result;
 	}
+
+
+	bool ReadWidgetGenTemplateFile(const FString& TemplateFileName, FString& OutFileContents, FText& OutFailReason)
+	{
+		FString ContentDir;
+		if (UPluginBlueprintLibrary::GetPluginContentDir(TEXT("WidgetGenCodeTool"), ContentDir))
+		{
+			const FString FullFileName = ContentDir / TEXT("Editor") / TEXT("Templates") / TemplateFileName;
+
+			if (FFileHelper::LoadFileToString(OutFileContents, *FullFileName))
+			{
+				return true;
+			}
+
+			FFormatNamedArguments Args;
+			Args.Add(TEXT("FullFileName"), FText::FromString(FullFileName));
+			OutFailReason = FText::Format(LOCTEXT("FailedToReadTemplateFile", "Failed to read template file \"{FullFileName}\""), Args);
+		}
+
+		return false;
+	}
+
+	bool GetClassIncludePath(const UClass* InClass, FString& OutIncludePath)
+	{
+		if (InClass && InClass->HasMetaData(TEXT("IncludePath")))
+		{
+			OutIncludePath = InClass->GetMetaData(TEXT("IncludePath"));
+			return true;
+		}
+		return false;
+	}
+
 }
 
 bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprint, FWidgetGenClassInfomation& OutBaseClassInfo, FWidgetGenClassInfomation& OutImplmentClassInfo)
@@ -128,7 +163,7 @@ bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprin
 
 		const auto FindModule = [](const FString& InModuleName) -> TOptional<FModuleContextInfo>
 			{
-				for(const FModuleContextInfo& ModuleInfo : GameProjectUtils::GetCurrentProjectModules())
+				for (const FModuleContextInfo& ModuleInfo : GameProjectUtils::GetCurrentProjectModules())
 				{
 					if (ModuleInfo.ModuleName == InModuleName)
 					{
@@ -203,42 +238,34 @@ bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprin
 	return true;
 }
 
-#if 0
-bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(const FString& NewHeaderFileName, const FString UnPrefixedClassName, const FNewClassInfo ParentClassInfo, const TArray<FString>& ClassSpecifierList, const FString& ClassProperties, const FString& ClassFunctionDeclarations, FString& OutSyncLocation, const FModuleContextInfo& ModuleInfo, bool bDeclareConstructor, FText& OutFailReason)
+bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
+	const FWidgetGenClassInfomation& ClassInfo,
+	const FNewClassInfo ParentClassInfo,
+	const TArray<FString>& ClassSpecifierList,
+	const FString& ClassProperties,
+	const FString& ClassForwardDeclaration,
+	FString& OutSyncLocation,
+	FText& OutFailReason)
 {
-	FString Template;
-	bool bTemplateFound = false;
-	if (GEditor)
-	{
-		if (UClassTemplateEditorSubsystem* TemplateSubsystem = GEditor->GetEditorSubsystem<UClassTemplateEditorSubsystem>())
-		{
-			for (const UClass* BaseClass = ParentClassInfo.BaseClass; BaseClass != nullptr; BaseClass = BaseClass->GetSuperClass())
-			{
-				if (const UClassTemplate* ClassTemplate = TemplateSubsystem->FindClassTemplate(BaseClass))
-				{
-					bTemplateFound = ClassTemplate->ReadHeader(Template, OutFailReason);
-					if (!bTemplateFound)
-					{
-						return false;
-					}
-					break;
-				}
-			}
-		}
-	}
+	const FString& NewHeaderFileName = ClassInfo.ClassHeaderPath;
+	const FString& UnPrefixedClassName = ClassInfo.ClassName;
+	const FModuleContextInfo& ModuleInfo = ClassInfo.ClassModule;
 
-	if (!bTemplateFound && !GameProjectUtils::ReadTemplateFile(ParentClassInfo.GetHeaderTemplateFilename(), Template, OutFailReason))
+	FString Template;
+
+	if (!ReadWidgetGenTemplateFile(TEXT("WidgetGenClass.h.template"), Template, OutFailReason))
 	{
 		return false;
 	}
 
-	const FString ClassPrefix = ParentClassInfo.GetClassPrefixCPP();
+	const FString ClassPrefix = TEXT("U");
 	const FString PrefixedClassName = ClassPrefix + UnPrefixedClassName;
-	const FString PrefixedBaseClassName = ClassPrefix + ParentClassInfo.GetClassNameCPP();
+	const FString BaseClassName = ParentClassInfo.BaseClass ? ParentClassInfo.BaseClass->GetName() : TEXT("");
+	const FString PrefixedBaseClassName = ClassPrefix + BaseClassName;
 
 	FString BaseClassIncludeDirective;
 	FString BaseClassIncludePath;
-	if (ParentClassInfo.GetIncludePath(BaseClassIncludePath))
+	if (GetClassIncludePath(ParentClassInfo.BaseClass, BaseClassIncludePath))
 	{
 		BaseClassIncludeDirective = FString::Printf(IncludePathFormatString, *BaseClassIncludePath);
 	}
@@ -257,13 +284,6 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(const FString& NewHeader
 	}
 
 	FString EventualConstructorDeclaration;
-	if (bDeclareConstructor)
-	{
-		if (!GenerateConstructorDeclaration(EventualConstructorDeclaration, PrefixedClassName, OutFailReason))
-		{
-			return false;
-		}
-	}
 
 	// Not all of these will exist in every class template
 	FString FinalOutput = Template.Replace(TEXT("%COPYRIGHT_LINE%"), *MakeCopyrightLine(), ESearchCase::CaseSensitive);
@@ -272,14 +292,13 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(const FString& NewHeader
 	FinalOutput = FinalOutput.Replace(TEXT("%UCLASS_SPECIFIER_LIST%"), *GameProjectUtils::MakeCommaDelimitedList(ClassSpecifierList, false), ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%PREFIXED_CLASS_NAME%"), *PrefixedClassName, ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%PREFIXED_BASE_CLASS_NAME%"), *PrefixedBaseClassName, ESearchCase::CaseSensitive);
-	FinalOutput = FinalOutput.Replace(TEXT("%MODULE_NAME%"), *ModuleInfo.ModuleName, ESearchCase::CaseSensitive);
+
+	FinalOutput = FinalOutput.Replace(TEXT("%CLASS_FORWARD_DECLARATION%"), *ClassForwardDeclaration, ESearchCase::CaseSensitive);
 
 	// Special case where where the wildcard starts with a tab and ends with a new line
-	const bool bLeadingTab = true;
-	const bool bTrailingNewLine = true;
-	FinalOutput = ReplaceWildcard(FinalOutput, TEXT("%EVENTUAL_CONSTRUCTOR_DECLARATION%"), *EventualConstructorDeclaration, bLeadingTab, bTrailingNewLine);
+	constexpr bool bLeadingTab = true;
+	constexpr bool bTrailingNewLine = true;
 	FinalOutput = ReplaceWildcard(FinalOutput, TEXT("%CLASS_PROPERTIES%"), *ClassProperties, bLeadingTab, bTrailingNewLine);
-	FinalOutput = ReplaceWildcard(FinalOutput, TEXT("%CLASS_FUNCTION_DECLARATIONS%"), *ClassFunctionDeclarations, bLeadingTab, bTrailingNewLine);
 	if (BaseClassIncludeDirective.Len() == 0)
 	{
 		FinalOutput = FinalOutput.Replace(TEXT("%BASE_CLASS_INCLUDE_DIRECTIVE%") LINE_TERMINATOR, TEXT(""), ESearchCase::CaseSensitive);
@@ -289,48 +308,41 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(const FString& NewHeader
 	HarvestCursorSyncLocation(FinalOutput, OutSyncLocation);
 
 	return GameProjectUtils::WriteOutputFile(NewHeaderFileName, FinalOutput, OutFailReason);
-			}
-#endif
+}
 
 
-void WidgetGenCodeProjectUtils::Test(UWidgetBlueprint* InBlueprint)
+void WidgetGenCodeProjectUtils::GetPropertyInfos(UWidgetBlueprint* InBlueprint, TArray<FObjectProperty*>& OutPropertys, TArray<UClass*>& OutPropertyClasses, TArray<FString>& OutPropertyHeaderFiles)
 {
 	UClass* Class = InBlueprint->GeneratedClass;
 
-	TArray<FObjectProperty*> Propertys;
-	TArray<UClass*> PropertyClasses;
-	TArray<FString> HeaderFiles;
+	auto AddProperty = [&](FObjectProperty* InProperty)
+		{
+			OutPropertys.Add(InProperty);
+			OutPropertyClasses.AddUnique(InProperty->PropertyClass);
+
+			FString HeaderPath;
+			if (GetClassIncludePath(InProperty->PropertyClass, HeaderPath))
+			{
+				OutPropertyHeaderFiles.AddUnique(HeaderPath);
+			}
+		};
 
 	for (FObjectProperty* Property : TFieldRange<FObjectProperty>(Class, EFieldIterationFlags::None))
 	{
 		const FName PropertyName = Property->GetFName();
 
-		if (UWidget* Widget = InBlueprint->WidgetTree->FindWidget(PropertyName))
+		if (InBlueprint->WidgetTree->FindWidget(PropertyName) != nullptr)
 		{
-			Propertys.Add(Property);
-			PropertyClasses.AddUnique(Property->PropertyClass);
+			AddProperty(Property);
 		}
-
 		for (auto Animation : InBlueprint->Animations)
 		{
 			if (Animation->GetFName() == PropertyName)
 			{
-				Propertys.Add(Property);
-				PropertyClasses.AddUnique(Property->PropertyClass);
+				AddProperty(Property);
 			}
 		}
 	}
-
-	for (UClass* PropertyClass : PropertyClasses)
-	{
-		FString HeaderPath;
-		if (FSourceCodeNavigation::FindClassHeaderPath(PropertyClass, HeaderPath))
-		{
-			HeaderFiles.AddUnique(HeaderPath);
-		}
-	}
-
-
-	int Hoge = 9;
-
 }
+
+#undef LOCTEXT_NAMESPACE

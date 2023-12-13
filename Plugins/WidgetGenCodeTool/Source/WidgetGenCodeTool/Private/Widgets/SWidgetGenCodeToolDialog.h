@@ -62,7 +62,7 @@ private:
 
 	TWeakObjectPtr<UWidgetBlueprint> WeakWidgetBlueprint;
 
-	FWidgetGenClassInfomation BaseClassInfo;
-	FWidgetGenClassInfomation ImplmentClassInfo;
+	TSharedPtr<FWidgetGenClassInfomation> BaseClassInfo;
+	TSharedPtr<FWidgetGenClassInfomation> ImplmentClassInfo;
 
 };

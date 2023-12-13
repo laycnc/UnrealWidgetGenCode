@@ -13,6 +13,8 @@ struct FWidgetGenClassInfomation
 {
 	FString ClassName;
 	FString ClassPath;
+	FString ClassHeaderPath;
+	FString ClassSourcePath;
 	FModuleContextInfo ClassModule;
 };
 
@@ -22,10 +24,16 @@ public:
 
 	static bool GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprint, FWidgetGenClassInfomation& OutBaseClassInfo, FWidgetGenClassInfomation& OutImplmentClassInfo);
 
-#if 0
-	bool GenerateClassHeaderFile(const FString& NewHeaderFileName, const FString UnPrefixedClassName, const FNewClassInfo ParentClassInfo, const TArray<FString>& ClassSpecifierList, const FString& ClassProperties, const FString& ClassFunctionDeclarations, FString& OutSyncLocation, const FModuleContextInfo& ModuleInfo, bool bDeclareConstructor, FText& OutFailReason);
-#endif
+	static void GetPropertyInfos(UWidgetBlueprint* InBlueprint, TArray<FObjectProperty*>& OutPropertys, TArray<UClass*>& OutPropertyClasses, TArray<FString>& OutPropertyHeaderFiles);
 
-	static void Test(UWidgetBlueprint* InBlueprint);
+	static bool GenerateClassHeaderFile(
+		const FWidgetGenClassInfomation& ClassInfo,
+		const FNewClassInfo ParentClassInfo, 
+		const TArray<FString>& ClassSpecifierList, 
+		const FString& ClassProperties,
+		const FString& ClassForwardDeclaration,
+		FString& OutSyncLocation, 
+		FText& OutFailReason);
+
 
 };
