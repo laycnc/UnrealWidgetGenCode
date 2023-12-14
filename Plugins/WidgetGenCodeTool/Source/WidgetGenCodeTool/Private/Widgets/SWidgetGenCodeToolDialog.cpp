@@ -130,22 +130,46 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		ClassForwardDeclaration += FString::Printf(TEXT("class U%s;\r\n"), *PropertyClass->GetName());
 	}
 
-	int A = 9;
+	FString ClassMemberInitialized;
+	for (const FObjectProperty* Property : Propertys)
+	{
+		ClassMemberInitialized += FString::Printf(TEXT("\tSetProperty(TEXT(\"%s\"), %s);\r\n"),
+			*Property->GetName(),
+			*Property->GetName()
+		);
+	}
+
+	FString AdditionalIncludeDirectives;
+	for (const FString& HeaderFile : PropertyHeaderFiles)
+	{
+		AdditionalIncludeDirectives += FString::Printf(TEXT("#include \"%s\"\r\n"), *HeaderFile);
+	}
 
 #if 1
 
 	TArray<FString> ClassSpecifierList;
 
-	FString SyncLocation;
 	FText FailReason;
 
+	FString SyncHeaderLocation;
 	WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 		*BaseClassInfo,
 		FNewClassInfo(WeakWidgetBlueprint->ParentClass),
 		ClassSpecifierList,
 		ClassProperties,
 		ClassForwardDeclaration,
-		SyncLocation,
+		SyncHeaderLocation,
+		FailReason
+	);
+
+
+	FString SyncSourceLocation;
+	WidgetGenCodeProjectUtils::GenerateClassSourceFile(
+		*BaseClassInfo,
+		FNewClassInfo(WeakWidgetBlueprint->ParentClass),
+		AdditionalIncludeDirectives,
+		ClassMemberInitialized,
+		SyncSourceLocation,
 		FailReason
 	);
 #endif

@@ -125,6 +125,108 @@ namespace
 		return false;
 	}
 
+
+	static bool TryParseIncludeDirective(const FString& Text, int StartPos, int EndPos, FString& IncludePath)
+	{
+		// Check if the line starts with a # character
+		int Pos = StartPos;
+		while (Pos < EndPos && FChar::IsWhitespace(Text[Pos]))
+		{
+			Pos++;
+		}
+		if (Pos == EndPos || Text[Pos++] != '#')
+		{
+			return false;
+		}
+		while (Pos < EndPos && FChar::IsWhitespace(Text[Pos]))
+		{
+			Pos++;
+		}
+
+		// Check it's an include directive
+		const TCHAR* IncludeText = TEXT("include");
+		for (int Idx = 0; IncludeText[Idx] != 0; Idx++)
+		{
+			if (Pos == EndPos || Text[Pos] != IncludeText[Idx])
+			{
+				return false;
+			}
+			Pos++;
+		}
+		while (Pos < EndPos && FChar::IsWhitespace(Text[Pos]))
+		{
+			Pos++;
+		}
+
+		// Parse out the quoted include path
+		if (Pos == EndPos || Text[Pos++] != '"')
+		{
+			return false;
+		}
+		int IncludePathPos = Pos;
+		while (Pos < EndPos && Text[Pos] != '"')
+		{
+			Pos++;
+		}
+		IncludePath = Text.Mid(IncludePathPos, Pos - IncludePathPos);
+		return true;
+	}
+
+	static bool IsUsingOldStylePch(FString BaseDir)
+	{
+		// Find all the cpp files under the base directory
+		TArray<FString> Files;
+		IFileManager::Get().FindFilesRecursive(Files, *BaseDir, TEXT("*.cpp"), true, false, false);
+
+		// Parse the first include directive for up to 16 include paths
+		TArray<FString> FirstIncludedFiles;
+		for (int Idx = 0; Idx < Files.Num() && Idx < 16; Idx++)
+		{
+			FString Text;
+			FFileHelper::LoadFileToString(Text, *Files[Idx]);
+
+			int LinePos = 0;
+			while (LinePos < Text.Len())
+			{
+				int EndOfLinePos = LinePos;
+				while (EndOfLinePos < Text.Len() && Text[EndOfLinePos] != '\n')
+				{
+					EndOfLinePos++;
+				}
+
+				FString IncludePath;
+				if (TryParseIncludeDirective(Text, LinePos, EndOfLinePos, IncludePath))
+				{
+					FirstIncludedFiles.AddUnique(FPaths::GetCleanFilename(IncludePath));
+					break;
+				}
+
+				LinePos = EndOfLinePos + 1;
+			}
+		}
+		return FirstIncludedFiles.Num() == 1 && Files.Num() > 1;
+	}
+
+
+	FString GetIncludePathForFile(const FString& InFullFilePath, const FString& ModuleRootPath)
+	{
+		FString RelativeHeaderPath = FPaths::ChangeExtension(InFullFilePath, "h");
+
+		const FString PublicString = ModuleRootPath / "Public" / "";
+		if (RelativeHeaderPath.StartsWith(PublicString))
+		{
+			return RelativeHeaderPath.RightChop(PublicString.Len());
+		}
+
+		const FString PrivateString = ModuleRootPath / "Private" / "";
+		if (RelativeHeaderPath.StartsWith(PrivateString))
+		{
+			return RelativeHeaderPath.RightChop(PrivateString.Len());
+		}
+
+		return RelativeHeaderPath.RightChop(ModuleRootPath.Len());
+	}
+
 }
 
 bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprint, FWidgetGenClassInfomation& OutBaseClassInfo, FWidgetGenClassInfomation& OutImplmentClassInfo)
@@ -238,6 +340,42 @@ bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprin
 	return true;
 }
 
+
+void WidgetGenCodeProjectUtils::GetPropertyInfos(UWidgetBlueprint* InBlueprint, TArray<FObjectProperty*>& OutPropertys, TArray<UClass*>& OutPropertyClasses, TArray<FString>& OutPropertyHeaderFiles)
+{
+	UClass* Class = InBlueprint->GeneratedClass;
+
+	auto AddProperty = [&](FObjectProperty* InProperty)
+		{
+			OutPropertys.Add(InProperty);
+			OutPropertyClasses.AddUnique(InProperty->PropertyClass);
+
+			FString HeaderPath;
+			if (GetClassIncludePath(InProperty->PropertyClass, HeaderPath))
+			{
+				OutPropertyHeaderFiles.AddUnique(HeaderPath);
+			}
+		};
+
+	for (FObjectProperty* Property : TFieldRange<FObjectProperty>(Class, EFieldIterationFlags::None))
+	{
+		const FName PropertyName = Property->GetFName();
+
+		if (InBlueprint->WidgetTree->FindWidget(PropertyName) != nullptr)
+		{
+			AddProperty(Property);
+		}
+		for (auto Animation : InBlueprint->Animations)
+		{
+			if (Animation->GetFName() == PropertyName)
+			{
+				AddProperty(Property);
+			}
+		}
+	}
+}
+
+
 bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 	const FWidgetGenClassInfomation& ClassInfo,
 	const FNewClassInfo ParentClassInfo,
@@ -283,8 +421,6 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 		}
 	}
 
-	FString EventualConstructorDeclaration;
-
 	// Not all of these will exist in every class template
 	FString FinalOutput = Template.Replace(TEXT("%COPYRIGHT_LINE%"), *MakeCopyrightLine(), ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%UNPREFIXED_CLASS_NAME%"), *UnPrefixedClassName, ESearchCase::CaseSensitive);
@@ -310,39 +446,80 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 	return GameProjectUtils::WriteOutputFile(NewHeaderFileName, FinalOutput, OutFailReason);
 }
 
-
-void WidgetGenCodeProjectUtils::GetPropertyInfos(UWidgetBlueprint* InBlueprint, TArray<FObjectProperty*>& OutPropertys, TArray<UClass*>& OutPropertyClasses, TArray<FString>& OutPropertyHeaderFiles)
+bool WidgetGenCodeProjectUtils::GenerateClassSourceFile(
+	const FWidgetGenClassInfomation& ClassInfo,
+	const FNewClassInfo ParentClassInfo,
+	const FString& AdditionalIncludeDirectives,
+	const FString& ClassMemberInitialized,
+	FString& OutSyncLocation,
+	FText& OutFailReason)
 {
-	UClass* Class = InBlueprint->GeneratedClass;
+	const FString& NewSourceFileName = ClassInfo.ClassSourcePath;
+	const FString& UnPrefixedClassName = ClassInfo.ClassName;
+	const FModuleContextInfo& ModuleInfo = ClassInfo.ClassModule;
 
-	auto AddProperty = [&](FObjectProperty* InProperty)
-		{
-			OutPropertys.Add(InProperty);
-			OutPropertyClasses.AddUnique(InProperty->PropertyClass);
+	FString Template;
 
-			FString HeaderPath;
-			if (GetClassIncludePath(InProperty->PropertyClass, HeaderPath))
-			{
-				OutPropertyHeaderFiles.AddUnique(HeaderPath);
-			}
-		};
-
-	for (FObjectProperty* Property : TFieldRange<FObjectProperty>(Class, EFieldIterationFlags::None))
+	if (!ReadWidgetGenTemplateFile(TEXT("WidgetGenClass.cpp.template"), Template, OutFailReason))
 	{
-		const FName PropertyName = Property->GetFName();
+		return false;
+	}
 
-		if (InBlueprint->WidgetTree->FindWidget(PropertyName) != nullptr)
+	const FString ClassPrefix = TEXT("U");
+	const FString PrefixedClassName = ClassPrefix + UnPrefixedClassName;
+
+	FString BaseClassIncludeDirective;
+	FString BaseClassIncludePath;
+	if (GetClassIncludePath(ParentClassInfo.BaseClass, BaseClassIncludePath))
+	{
+		BaseClassIncludeDirective = FString::Printf(IncludePathFormatString, *BaseClassIncludePath);
+	}
+
+	// Calculate the correct include path for the module header
+	FString PchIncludeDirective;
+	if (IsUsingOldStylePch(ModuleInfo.ModuleSourcePath))
+	{
+		const FString ModuleIncludePath = GameProjectUtils::DetermineModuleIncludePath(ModuleInfo, NewSourceFileName);
+		if (ModuleIncludePath.Len() > 0)
 		{
-			AddProperty(Property);
-		}
-		for (auto Animation : InBlueprint->Animations)
-		{
-			if (Animation->GetFName() == PropertyName)
-			{
-				AddProperty(Property);
-			}
+			PchIncludeDirective = FString::Printf(IncludePathFormatString, *ModuleIncludePath);
 		}
 	}
+
+	// Not all of these will exist in every class template
+	FString FinalOutput = Template.Replace(TEXT("%COPYRIGHT_LINE%"), *MakeCopyrightLine(), ESearchCase::CaseSensitive);
+	FinalOutput = FinalOutput.Replace(TEXT("%PREFIXED_CLASS_NAME%"), *PrefixedClassName, ESearchCase::CaseSensitive);
+	FinalOutput = FinalOutput.Replace(TEXT("%ADDITIONAL_INCLUDE_DIRECTIVES%"), *AdditionalIncludeDirectives, ESearchCase::CaseSensitive);
+	FinalOutput = FinalOutput.Replace(TEXT("%PCH_INCLUDE_DIRECTIVE%"), *PchIncludeDirective, ESearchCase::CaseSensitive);
+
+	// Fixup the header file include for this cpp file
+	{
+		const FString RelativeHeaderIncludePath = GetIncludePathForFile(NewSourceFileName, ModuleInfo.ModuleSourcePath);
+
+		// First make sure we remove any potentially incorrect, legacy paths generated from some version of #include "%UNPREFIXED_CLASS_NAME%.h"
+		// This didn't take into account potential subfolders for the created class
+		const FString LegacyHeaderInclude = FString::Printf(IncludePathFormatString, *FPaths::GetCleanFilename(RelativeHeaderIncludePath));
+		FinalOutput = FinalOutput.Replace(*LegacyHeaderInclude, TEXT(""), ESearchCase::CaseSensitive);
+
+		// Now add the correct include directive which may include a subfolder.
+		const FString HeaderIncludeDirective = FString::Printf(IncludePathFormatString, *RelativeHeaderIncludePath);
+		FinalOutput = FinalOutput.Replace(TEXT("%MY_HEADER_INCLUDE_DIRECTIVE%"), *HeaderIncludeDirective, ESearchCase::CaseSensitive);
+	}
+
+	// Special case where where the wildcard starts with a tab and ends with a new line
+	constexpr bool bLeadingTab = true;
+	constexpr bool bTrailingNewLine = true;
+	FinalOutput = ReplaceWildcard(FinalOutput, TEXT("%CLASS_MEMBER_INITIALIZED%"), *ClassMemberInitialized, bLeadingTab, bTrailingNewLine);
+	if (BaseClassIncludeDirective.Len() == 0)
+	{
+		FinalOutput = FinalOutput.Replace(TEXT("%BASE_CLASS_INCLUDE_DIRECTIVE%") LINE_TERMINATOR, TEXT(""), ESearchCase::CaseSensitive);
+	}
+	FinalOutput = FinalOutput.Replace(TEXT("%BASE_CLASS_INCLUDE_DIRECTIVE%"), *BaseClassIncludeDirective, ESearchCase::CaseSensitive);
+
+	HarvestCursorSyncLocation(FinalOutput, OutSyncLocation);
+
+	return GameProjectUtils::WriteOutputFile(NewSourceFileName, FinalOutput, OutFailReason);
 }
+
 
 #undef LOCTEXT_NAMESPACE

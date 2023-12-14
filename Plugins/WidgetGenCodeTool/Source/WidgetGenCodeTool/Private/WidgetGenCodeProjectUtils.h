@@ -36,4 +36,13 @@ public:
 		FText& OutFailReason);
 
 
+	static bool GenerateClassSourceFile(
+		const FWidgetGenClassInfomation& ClassInfo,
+		const FNewClassInfo ParentClassInfo,
+		const FString& AdditionalIncludeDirectives,
+		const FString& ClassMemberInitialized,
+		FString& OutSyncLocation,
+		FText& OutFailReason);
+
+
 };
