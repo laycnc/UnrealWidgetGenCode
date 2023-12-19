@@ -25,21 +25,15 @@
 #include "Widgets/DeclarativeSyntaxSupport.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/SCompoundWidget.h"
-#include "WidgetGenCodeProjectUtils.h"
 
-
-class IClassViewerFilter;
-class ITableRow;
 class SEditableTextBox;
-class STableViewBase;
 class SWidget;
-class SWindow;
-class SWizard;
 class UClass;
 struct FGeometry;
 struct FKeyEvent;
 struct FModuleContextInfo;
 struct FParentClassItem;
+struct FWidgetGenClassInfomation;
 
 enum class EClassDomain : uint8 { Blueprint, Native };
 
@@ -48,13 +42,12 @@ enum class EClassDomain : uint8 { Blueprint, Native };
  */
 class SWidgetGenClassInfo : public SCompoundWidget
 {
-	using FOnClassInfoChanged = typename TSlateDelegates< TSharedPtr<FModuleContextInfo> >::FOnSelectionChanged;
 public:
 	SLATE_BEGIN_ARGS(SWidgetGenClassInfo)
 		: _ClassInfo()
 		{}
 
-		SLATE_ARGUMENT(FWidgetGenClassInfomation, ClassInfo)
+		SLATE_ARGUMENT(TSharedPtr<FWidgetGenClassInfomation>, ClassInfo)
 
 	SLATE_END_ARGS()
 
@@ -126,18 +119,6 @@ private:
 	/** The last selected module name. Meant to keep the same module selected after first selection */
 	static FString LastSelectedModuleName;
 
-	/** The name of the class being created */
-	FString NewClassName;
-
-	/** The path to place the files for the class being generated */
-	FString NewClassPath;
-
-	/** The calculated name of the generated header file for this class */
-	FString CalculatedClassHeaderName;
-
-	/** The calculated name of the generated source file for this class */
-	FString CalculatedClassSourceName;
-
 	/** The last time that the class name/path was checked for validity. This is used to throttle I/O requests to a reasonable frequency */
 	double LastPeriodicValidityCheckTime;
 
@@ -161,5 +142,7 @@ private:
 
 	/** Information about the currently selected module; used for class validation */
 	TSharedPtr<FModuleContextInfo> SelectedModuleInfo;
+
+	TSharedPtr<FWidgetGenClassInfomation> ClassInfomation;
 
 };

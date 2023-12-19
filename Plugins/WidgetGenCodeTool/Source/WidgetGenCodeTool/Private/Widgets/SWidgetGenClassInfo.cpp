@@ -29,6 +29,7 @@
 #include "Widgets/Input/SSegmentedControl.h"
 #include "ClassIconFinder.h"
 #include "SWarningOrErrorBox.h"
+#include "WidgetGenCodeProjectUtils.h"
 
 #define LOCTEXT_NAMESPACE "GameProjectGeneration"
 
@@ -60,6 +61,8 @@ static void FindPublicEngineHeaderFiles(TArray<FString>& OutFiles, const FString
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
 void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 {
+	ClassInfomation = InArgs._ClassInfo;
+
 	{
 		TArray<FModuleContextInfo> CurrentModules = GameProjectUtils::GetCurrentProjectModules();
 		check(CurrentModules.Num()); // this should never happen since GetCurrentProjectModules is supposed to add a dummy runtime module if the project currently has no modules
@@ -76,12 +79,9 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 
 		Algo::SortBy(AvailableModules, &FModuleContextInfo::ModuleName);
 
-		NewClassName = InArgs._ClassInfo.ClassName;
-		NewClassPath = InArgs._ClassInfo.ClassPath;
-
 		for (const auto& AvailableModule : AvailableModules)
 		{
-			if (InArgs._ClassInfo.ClassModule.ModuleName == AvailableModule->ModuleName)
+			if (ClassInfomation->ClassModule.ModuleName == AvailableModule->ModuleName)
 			{
 				SelectedModuleInfo = AvailableModule;
 				break;
@@ -140,7 +140,7 @@ void SWidgetGenClassInfo::Construct(const FArguments& InArgs)
 			}
 		}
 
-		NewClassPath = SelectedModuleInfo->ModuleSourcePath;
+		ClassInfomation->ClassPath = SelectedModuleInfo->ModuleSourcePath;
 	}
 
 	ClassLocation = GameProjectUtils::EClassLocation::UserDefined; // the first call to UpdateInputValidity will set this correctly based on NewClassPath
@@ -453,28 +453,28 @@ FText SWidgetGenClassInfo::GetNameClassTitle() const
 
 FText SWidgetGenClassInfo::OnGetClassNameText() const
 {
-	return FText::FromString(NewClassName);
+	return FText::FromString(ClassInfomation->ClassName);
 }
 
 void SWidgetGenClassInfo::OnClassNameTextChanged(const FText& NewText)
 {
-	NewClassName = NewText.ToString();
+	ClassInfomation->ClassName = NewText.ToString();
 	UpdateInputValidity();
 }
 
 FText SWidgetGenClassInfo::OnGetClassPathText() const
 {
-	return FText::FromString(NewClassPath);
+	return FText::FromString(ClassInfomation->ClassPath);
 }
 
 void SWidgetGenClassInfo::OnClassPathTextChanged(const FText& NewText)
 {
-	NewClassPath = NewText.ToString();
+	ClassInfomation->ClassPath = NewText.ToString();
 
 	// If the user has selected a path which matches the root of a known module, then update our selected module to be that module
 	for (const auto& AvailableModule : AvailableModules)
 	{
-		if (NewClassPath.StartsWith(AvailableModule->ModuleSourcePath))
+		if (ClassInfomation->ClassPath.StartsWith(AvailableModule->ModuleSourcePath))
 		{
 			SelectedModuleInfo = AvailableModule;
 			AvailableModulesCombo->SetSelectedItem(SelectedModuleInfo);
@@ -487,12 +487,12 @@ void SWidgetGenClassInfo::OnClassPathTextChanged(const FText& NewText)
 
 FText SWidgetGenClassInfo::OnGetClassHeaderFileText() const
 {
-	return FText::FromString(CalculatedClassHeaderName);
+	return FText::FromString(ClassInfomation->ClassHeaderPath);
 }
 
 FText SWidgetGenClassInfo::OnGetClassSourceFileText() const
 {
-	return FText::FromString(CalculatedClassSourceName);
+	return FText::FromString(ClassInfomation->ClassSourcePath);
 }
 
 FReply SWidgetGenClassInfo::HandleChooseFolderButtonClicked()
@@ -508,7 +508,7 @@ FReply SWidgetGenClassInfo::HandleChooseFolderButtonClicked()
 		const bool bFolderSelected = DesktopPlatform->OpenDirectoryDialog(
 			ParentWindowWindowHandle,
 			Title,
-			NewClassPath,
+			ClassInfomation->ClassPath,
 			FolderName
 		);
 
@@ -519,12 +519,12 @@ FReply SWidgetGenClassInfo::HandleChooseFolderButtonClicked()
 				FolderName += TEXT("/");
 			}
 
-			NewClassPath = FolderName;
+			ClassInfomation->ClassPath = FolderName;
 
 			// If the user has selected a path which matches the root of a known module, then update our selected module to be that module
 			for (const auto& AvailableModule : AvailableModules)
 			{
-				if (NewClassPath.StartsWith(AvailableModule->ModuleSourcePath))
+				if (ClassInfomation->ClassPath.StartsWith(AvailableModule->ModuleSourcePath))
 				{
 					SelectedModuleInfo = AvailableModule;
 					AvailableModulesCombo->SetSelectedItem(SelectedModuleInfo);
@@ -555,10 +555,10 @@ void SWidgetGenClassInfo::SelectedModuleComboBoxSelectionChanged(TSharedPtr<FMod
 	SelectedModuleInfo = Value;
 
 	// Update the class path to be rooted to the new module location
-	const FString AbsoluteClassPath = FPaths::ConvertRelativePathToFull(NewClassPath) / ""; // Ensure trailing /
+	const FString AbsoluteClassPath = FPaths::ConvertRelativePathToFull(ClassInfomation->ClassPath) / ""; // Ensure trailing /
 	if (AbsoluteClassPath.StartsWith(OldModulePath))
 	{
-		NewClassPath = AbsoluteClassPath.Replace(*OldModulePath, *NewModulePath);
+		ClassInfomation->ClassPath = AbsoluteClassPath.Replace(*OldModulePath, *NewModulePath);
 	}
 
 	UpdateInputValidity();
@@ -580,7 +580,7 @@ GameProjectUtils::EClassLocation SWidgetGenClassInfo::IsClassLocationActive() co
 
 void SWidgetGenClassInfo::OnClassLocationChanged(GameProjectUtils::EClassLocation InLocation)
 {
-	const FString AbsoluteClassPath = FPaths::ConvertRelativePathToFull(NewClassPath) / ""; // Ensure trailing /
+	const FString AbsoluteClassPath = FPaths::ConvertRelativePathToFull(ClassInfomation->ClassPath) / ""; // Ensure trailing /
 
 	GameProjectUtils::EClassLocation TmpClassLocation = GameProjectUtils::EClassLocation::UserDefined;
 	GameProjectUtils::GetClassLocation(AbsoluteClassPath, *SelectedModuleInfo, TmpClassLocation);
@@ -594,19 +594,19 @@ void SWidgetGenClassInfo::OnClassLocationChanged(GameProjectUtils::EClassLocatio
 		{
 			if (AbsoluteClassPath.StartsWith(InOtherPath1))
 			{
-				NewClassPath = AbsoluteClassPath.Replace(*InOtherPath1, *InNewClassPath);
+				ClassInfomation->ClassPath = AbsoluteClassPath.Replace(*InOtherPath1, *InNewClassPath);
 			}
 			else if (AbsoluteClassPath.StartsWith(InOtherPath2))
 			{
-				NewClassPath = AbsoluteClassPath.Replace(*InOtherPath2, *InNewClassPath);
+				ClassInfomation->ClassPath = AbsoluteClassPath.Replace(*InOtherPath2, *InNewClassPath);
 			}
 			else if (AbsoluteClassPath.StartsWith(RootPath))
 			{
-				NewClassPath = AbsoluteClassPath.Replace(*RootPath, *InNewClassPath);
+				ClassInfomation->ClassPath = AbsoluteClassPath.Replace(*RootPath, *InNewClassPath);
 			}
 			else
 			{
-				NewClassPath = InNewClassPath;
+				ClassInfomation->ClassPath = InNewClassPath;
 			}
 		};
 
@@ -636,14 +636,14 @@ void SWidgetGenClassInfo::UpdateInputValidity()
 	bLastInputValidityCheckSuccessful = true;
 
 	// Validate the path first since this has the side effect of updating the UI
-	bLastInputValidityCheckSuccessful = GameProjectUtils::CalculateSourcePaths(NewClassPath, *SelectedModuleInfo, CalculatedClassHeaderName, CalculatedClassSourceName, &LastInputValidityErrorText);
-	CalculatedClassHeaderName /= (NewClassName + TEXT(".h"));
-	CalculatedClassSourceName /= (NewClassName + TEXT(".cpp"));
+	bLastInputValidityCheckSuccessful = GameProjectUtils::CalculateSourcePaths(ClassInfomation->ClassPath, *SelectedModuleInfo, ClassInfomation->ClassHeaderPath, ClassInfomation->ClassSourcePath, &LastInputValidityErrorText);
+	ClassInfomation->ClassHeaderPath /= (ClassInfomation->ClassName + TEXT(".h"));
+	ClassInfomation->ClassSourcePath /= (ClassInfomation->ClassName + TEXT(".cpp"));
 
 	// If the source paths check as succeeded, check to see if we're using a Public/Private class
 	if (bLastInputValidityCheckSuccessful)
 	{
-		GameProjectUtils::GetClassLocation(NewClassPath, *SelectedModuleInfo, ClassLocation);
+		GameProjectUtils::GetClassLocation(ClassInfomation->ClassPath, *SelectedModuleInfo, ClassLocation);
 
 		// We only care about the Public and Private folders
 		if (ClassLocation != GameProjectUtils::EClassLocation::Public && ClassLocation != GameProjectUtils::EClassLocation::Private && ClassLocation != GameProjectUtils::EClassLocation::Classes)
@@ -660,11 +660,11 @@ void SWidgetGenClassInfo::UpdateInputValidity()
 	if (bLastInputValidityCheckSuccessful)
 	{
 		const TSet<FString>& DisallowedHeaderNames = FSourceCodeNavigation::GetSourceFileDatabase().GetDisallowedHeaderNames();
-		bLastInputValidityCheckSuccessful = GameProjectUtils::IsValidClassNameForCreation(NewClassName, *SelectedModuleInfo, DisallowedHeaderNames, LastInputValidityErrorText);
+		bLastInputValidityCheckSuccessful = GameProjectUtils::IsValidClassNameForCreation(ClassInfomation->ClassName, *SelectedModuleInfo, DisallowedHeaderNames, LastInputValidityErrorText);
 	}
 
 	LastPeriodicValidityCheckTime = FSlateApplication::Get().GetCurrentTime();
-
+	
 	// Since this function was invoked, periodic validity checks should be re-enabled if they were disabled.
 	bPreventPeriodicValidityChecksUntilNextChange = false;
 }

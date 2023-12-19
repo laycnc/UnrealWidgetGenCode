@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "AddToProjectConfig.h"
 #include "ModuleDescriptor.h"
+#include "GameProjectUtils.h"
 
 class UWidgetBlueprint;
 struct FModuleContextInfo;
+struct FSlowTask;
 
 struct FWidgetGenClassInfomation
 {
@@ -28,11 +30,11 @@ public:
 
 	static bool GenerateClassHeaderFile(
 		const FWidgetGenClassInfomation& ClassInfo,
-		const FNewClassInfo ParentClassInfo, 
-		const TArray<FString>& ClassSpecifierList, 
+		const FNewClassInfo ParentClassInfo,
+		const TArray<FString>& ClassSpecifierList,
 		const FString& ClassProperties,
 		const FString& ClassForwardDeclaration,
-		FString& OutSyncLocation, 
+		FString& OutSyncLocation,
 		FText& OutFailReason);
 
 
@@ -44,5 +46,23 @@ public:
 		FString& OutSyncLocation,
 		FText& OutFailReason);
 
+
+#if 0
+
+	static GameProjectUtils::EAddCodeToProjectResult AddCodeToProject_Internal(const FString& NewClassName, const FString& NewClassPath, const FModuleContextInfo& ModuleInfo, const FNewClassInfo ParentClassInfo, const TSet<FString>& DisallowedHeaderNames, FString& OutHeaderFilePath, FString& OutCppFilePath, FText& OutFailReason, GameProjectUtils::EReloadStatus& OutReloadStatus);
+
+#endif
+
+	static GameProjectUtils::EAddCodeToProjectResult AddProjectFiles(
+		const TArray<FString>& CreatedFiles,
+		bool bProjectHadCodeFiles,
+		FText& OutFailReason,
+		FSlowTask* SlowTask = nullptr);
+
+	static GameProjectUtils::EAddCodeToProjectResult ProjectRecompileModule(
+		const FModuleContextInfo& ModuleInfo,
+		bool bProjectHadCodeFiles,
+		GameProjectUtils::EReloadStatus& OutReloadStatus,
+		FText& OutFailReason);
 
 };

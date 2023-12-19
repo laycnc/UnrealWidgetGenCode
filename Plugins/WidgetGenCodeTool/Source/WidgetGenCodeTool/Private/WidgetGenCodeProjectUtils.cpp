@@ -1,4 +1,6 @@
 #include "WidgetGenCodeProjectUtils.h"
+
+#include "Misc/Build.h"
 #include "GameProjectUtils.h"
 #include "ClassTemplateEditorSubsystem.h"
 #include "Editor.h"
@@ -9,6 +11,17 @@
 #include "Animation/WidgetAnimation.h"
 #include "SourceCodeNavigation.h"
 #include "PluginBlueprintLibrary.h"
+#include "Misc/ScopedSlowTask.h"
+#include "DesktopPlatformModule.h"
+#include "ISourceControlProvider.h"
+#include "ISourceControlModule.h"
+#include "SourceControlOperations.h"
+#include "Misc/HotReloadInterface.h"
+#include "Editor/EditorPerProjectUserSettings.h"
+
+#if WITH_LIVE_CODING
+#include "ILiveCodingModule.h"
+#endif
 
 #define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
@@ -519,6 +532,329 @@ bool WidgetGenCodeProjectUtils::GenerateClassSourceFile(
 	HarvestCursorSyncLocation(FinalOutput, OutSyncLocation);
 
 	return GameProjectUtils::WriteOutputFile(NewSourceFileName, FinalOutput, OutFailReason);
+}
+
+#if 0
+
+GameProjectUtils::EAddCodeToProjectResult AddCodeToProject_Internal(const FString& NewClassName, const FString& NewClassPath, const FModuleContextInfo& ModuleInfo, const FNewClassInfo ParentClassInfo, const TSet<FString>& DisallowedHeaderNames, FString& OutHeaderFilePath, FString& OutCppFilePath, FText& OutFailReason, GameProjectUtils::EReloadStatus& OutReloadStatus)
+{
+	if (!ParentClassInfo.IsSet())
+	{
+		OutFailReason = LOCTEXT("MissingParentClass", "You must specify a parent class");
+		return GameProjectUtils::EAddCodeToProjectResult::InvalidInput;
+	}
+
+	const FString CleanClassName = ParentClassInfo.GetCleanClassName(NewClassName);
+	const FString FinalClassName = ParentClassInfo.GetFinalClassName(NewClassName);
+
+	if (!GameProjectUtils::IsValidClassNameForCreation(FinalClassName, ModuleInfo, DisallowedHeaderNames, OutFailReason))
+	{
+		return GameProjectUtils::EAddCodeToProjectResult::InvalidInput;
+	}
+
+	if (!FApp::HasProjectName())
+	{
+		OutFailReason = LOCTEXT("AddCodeToProject_NoGameName", "You can not add code because you have not loaded a project.");
+		return GameProjectUtils::EAddCodeToProjectResult::FailedToAddCode;
+	}
+
+	FString NewHeaderPath;
+	FString NewCppPath;
+	if (!GameProjectUtils::CalculateSourcePaths(NewClassPath, ModuleInfo, NewHeaderPath, NewCppPath, &OutFailReason))
+	{
+		return GameProjectUtils::EAddCodeToProjectResult::FailedToAddCode;
+	}
+
+	FScopedSlowTask SlowTask(7, LOCTEXT("AddingCodeToProject", "Adding code to project..."));
+	SlowTask.MakeDialog();
+
+	SlowTask.EnterProgressFrame();
+
+	auto RequiredDependencies = GameProjectUtils::GetRequiredAdditionalDependencies(ParentClassInfo);
+	RequiredDependencies.Remove(ModuleInfo.ModuleName);
+
+	// Update project file if needed.
+	auto bUpdateProjectModules = false;
+
+	// If the project does not already contain code, add the primary game module
+	TArray<FString> CreatedFiles;
+	TArray<FString> StartupModuleNames;
+
+	const bool bProjectHadCodeFiles = GameProjectUtils::ProjectHasCodeFiles();
+	if (!bProjectHadCodeFiles)
+	{
+		// Delete any generated intermediate code files. This ensures that blueprint projects with custom build settings can be converted to code projects without causing errors.
+		IFileManager::Get().DeleteDirectory(*(FPaths::ProjectIntermediateDir() / TEXT("Source")), false, true);
+
+		// We always add the basic source code to the root directory, not the potential sub-directory provided by NewClassPath
+		const FString SourceDir = FPaths::GameSourceDir().LeftChop(1); // Trim the trailing /
+
+		// Assuming the game name is the same as the primary game module name
+		const FString GameModuleName = FApp::GetProjectName();
+
+		if (GameProjectUtils::GenerateBasicSourceCode(SourceDir, GameModuleName, FPaths::ProjectDir(), StartupModuleNames, CreatedFiles, OutFailReason))
+		{
+			bUpdateProjectModules = true;
+		}
+		else
+		{
+			GameProjectUtils::DeleteCreatedFiles(SourceDir, CreatedFiles);
+			return GameProjectUtils::EAddCodeToProjectResult::FailedToAddCode;
+		}
+	}
+
+	if (RequiredDependencies.Num() > 0 || bUpdateProjectModules)
+	{
+		GameProjectUtils::UpdateProject(
+			FProjectDescriptorModifier::CreateLambda(
+				[&StartupModuleNames, &RequiredDependencies, &ModuleInfo, bUpdateProjectModules](FProjectDescriptor& Descriptor)
+				{
+					bool bNeedsUpdate = false;
+
+					bNeedsUpdate |= GameProjectUtils::UpdateStartupModuleNames(Descriptor, bUpdateProjectModules ? &StartupModuleNames : nullptr);
+					bNeedsUpdate |= GameProjectUtils::UpdateRequiredAdditionalDependencies(Descriptor, RequiredDependencies, ModuleInfo.ModuleName);
+
+					return bNeedsUpdate;
+				}));
+	}
+
+	SlowTask.EnterProgressFrame();
+
+	// Class Header File
+	const FString NewHeaderFilename = NewHeaderPath / ParentClassInfo.GetHeaderFilename(NewClassName);
+	{
+		FString UnusedSyncLocation;
+		TArray<FString> ClassSpecifiers;
+
+		// Set UCLASS() specifiers based on parent class type. Currently, only UInterface uses this.
+		if (ParentClassInfo.ClassType == FNewClassInfo::EClassType::UInterface)
+		{
+			ClassSpecifiers.Add(TEXT("MinimalAPI"));
+		}
+
+#if 0
+		if (GameProjectUtils::GenerateClassHeaderFile(NewHeaderFilename, CleanClassName, ParentClassInfo, ClassSpecifiers, TEXT(""), TEXT(""), UnusedSyncLocation, ModuleInfo, false, OutFailReason))
+		{
+			CreatedFiles.Add(NewHeaderFilename);
+		}
+		else
+		{
+			GameProjectUtils::DeleteCreatedFiles(NewHeaderPath, CreatedFiles);
+			return GameProjectUtils::EAddCodeToProjectResult::FailedToAddCode;
+		}
+#endif
+	}
+
+	SlowTask.EnterProgressFrame();
+
+#if 0
+	// Class CPP file
+	const FString NewCppFilename = NewCppPath / ParentClassInfo.GetSourceFilename(NewClassName);
+	{
+		FString UnusedSyncLocation;
+		if (GameProjectUtils::GenerateClassCPPFile(NewCppFilename, CleanClassName, ParentClassInfo, TArray<FString>(), TArray<FString>(), TEXT(""), UnusedSyncLocation, ModuleInfo, OutFailReason))
+		{
+			CreatedFiles.Add(NewCppFilename);
+		}
+		else
+		{
+			GameProjectUtils::DeleteCreatedFiles(NewCppPath, CreatedFiles);
+			return GameProjectUtils::EAddCodeToProjectResult::FailedToAddCode;
+		}
+	}
+#endif
+
+	SlowTask.EnterProgressFrame();
+
+	TArray<FString> CreatedFilesForExternalAppRead;
+	CreatedFilesForExternalAppRead.Reserve(CreatedFiles.Num());
+	for (const FString& CreatedFile : CreatedFiles)
+	{
+		CreatedFilesForExternalAppRead.Add(IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*CreatedFile));
+	}
+
+	bool bGenerateProjectFiles = true;
+
+	// First see if we can avoid a full generation by adding the new files to an already open project
+	if (bProjectHadCodeFiles && FSourceCodeNavigation::AddSourceFiles(CreatedFilesForExternalAppRead))
+	{
+		// We managed the gather, so we can skip running the full generate
+		bGenerateProjectFiles = false;
+	}
+
+	if (bGenerateProjectFiles)
+	{
+		// Generate project files if we happen to be using a project file.
+		if (!FDesktopPlatformModule::Get()->GenerateProjectFiles(FPaths::RootDir(), FPaths::GetProjectFilePath(), GWarn))
+		{
+			OutFailReason = LOCTEXT("FailedToGenerateProjectFiles", "Failed to generate project files.");
+			return GameProjectUtils::EAddCodeToProjectResult::FailedToHotReload;
+		}
+	}
+
+	SlowTask.EnterProgressFrame();
+
+	// Mark the files for add in SCC
+	ISourceControlProvider& SourceControlProvider = ISourceControlModule::Get().GetProvider();
+	if (ISourceControlModule::Get().IsEnabled() && SourceControlProvider.IsAvailable())
+	{
+		SourceControlProvider.Execute(ISourceControlOperation::Create<FMarkForAdd>(), CreatedFilesForExternalAppRead);
+	}
+
+	SlowTask.EnterProgressFrame(1.0f, LOCTEXT("CompilingCPlusPlusCode", "Compiling new C++ code.  Please wait..."));
+
+	OutHeaderFilePath = NewHeaderFilename;
+	OutCppFilePath = NewCppFilename;
+	OutReloadStatus = GameProjectUtils::EReloadStatus::NotReloaded;
+
+	return WidgetGenCodeProjectUtils::ProjectRecompileModule(ModuleInfo, bProjectHadCodeFiles, OutReloadStatus, OutFailReason);
+}
+
+
+#endif
+
+GameProjectUtils::EAddCodeToProjectResult WidgetGenCodeProjectUtils::AddProjectFiles(
+	const TArray<FString>& CreatedFiles,
+	bool bProjectHadCodeFiles,
+	FText& OutFailReason,
+	FSlowTask* SlowTask)
+{
+	TArray<FString> CreatedFilesForExternalAppRead;
+	CreatedFilesForExternalAppRead.Reserve(CreatedFiles.Num());
+	for (const FString& CreatedFile : CreatedFiles)
+	{
+		CreatedFilesForExternalAppRead.Add(IFileManager::Get().ConvertToAbsolutePathForExternalAppForRead(*CreatedFile));
+	}
+
+	bool bGenerateProjectFiles = true;
+
+	// First see if we can avoid a full generation by adding the new files to an already open project
+	if (bProjectHadCodeFiles && FSourceCodeNavigation::AddSourceFiles(CreatedFilesForExternalAppRead))
+	{
+		// We managed the gather, so we can skip running the full generate
+		bGenerateProjectFiles = false;
+	}
+
+	if (bGenerateProjectFiles)
+	{
+		// Generate project files if we happen to be using a project file.
+		if (!FDesktopPlatformModule::Get()->GenerateProjectFiles(FPaths::RootDir(), FPaths::GetProjectFilePath(), GWarn))
+		{
+			OutFailReason = LOCTEXT("FailedToGenerateProjectFiles", "Failed to generate project files.");
+			return GameProjectUtils::EAddCodeToProjectResult::FailedToHotReload;
+		}
+	}
+
+	if (SlowTask)
+	{
+		SlowTask->EnterProgressFrame();
+	}
+
+	// Mark the files for add in SCC
+	ISourceControlProvider& SourceControlProvider = ISourceControlModule::Get().GetProvider();
+	if (ISourceControlModule::Get().IsEnabled() && SourceControlProvider.IsAvailable())
+	{
+		SourceControlProvider.Execute(ISourceControlOperation::Create<FMarkForAdd>(), CreatedFilesForExternalAppRead);
+	}
+
+	return GameProjectUtils::EAddCodeToProjectResult::Succeeded;
+}
+
+GameProjectUtils::EAddCodeToProjectResult WidgetGenCodeProjectUtils::ProjectRecompileModule(
+	const FModuleContextInfo& ModuleInfo,
+	bool bProjectHadCodeFiles,
+	GameProjectUtils::EReloadStatus& OutReloadStatus,
+	FText& OutFailReason)
+{
+#if WITH_LIVE_CODING
+	ILiveCodingModule* LiveCoding = FModuleManager::GetModulePtr<ILiveCodingModule>(LIVE_CODING_MODULE_NAME);
+	if (LiveCoding != nullptr && LiveCoding->IsEnabledForSession())
+	{
+		if (!bProjectHadCodeFiles)
+		{
+			FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("LiveCodingNoSources", "Project now includes sources, please close the editor and build from your IDE."));
+			return GameProjectUtils::EAddCodeToProjectResult::Succeeded;
+		}
+
+		if (LiveCoding->AutomaticallyCompileNewClasses())
+		{
+			LiveCoding->Compile(ELiveCodingCompileFlags::WaitForCompletion, nullptr);
+			OutReloadStatus = GameProjectUtils::EReloadStatus::Reloaded;
+		}
+		return GameProjectUtils::EAddCodeToProjectResult::Succeeded;
+	}
+#endif
+
+	if (!bProjectHadCodeFiles)
+	{
+		// This is the first time we add code to this project so compile its game DLL
+		const FString GameModuleName = FApp::GetProjectName();
+		check(ModuleInfo.ModuleName == GameModuleName);
+
+		// Because this project previously didn't have any code, the UBT target name will just be UnrealEditor. Now that we've
+		// added some code, the target name will be changed to match the editor target for the new source. 
+		FString NewUBTTargetName = GameModuleName + TEXT("Editor");
+		FPlatformMisc::SetUBTTargetName(*NewUBTTargetName);
+
+		IHotReloadInterface& HotReloadSupport = FModuleManager::LoadModuleChecked<IHotReloadInterface>("HotReload");
+		if (!HotReloadSupport.RecompileModule(*GameModuleName, *GWarn, ERecompileModuleFlags::ReloadAfterRecompile | ERecompileModuleFlags::ForceCodeProject))
+		{
+			OutFailReason = LOCTEXT("FailedToCompileNewGameModule", "Failed to compile newly created game module.");
+			return GameProjectUtils::EAddCodeToProjectResult::FailedToHotReload;
+		}
+
+		// Notify that we've created a brand new module
+		FSourceCodeNavigation::AccessOnNewModuleAdded().Broadcast(*GameModuleName);
+		OutReloadStatus = GameProjectUtils::EReloadStatus::Reloaded;
+	}
+	else if (GetDefault<UEditorPerProjectUserSettings>()->bAutomaticallyHotReloadNewClasses)
+	{
+		FModuleStatus ModuleStatus;
+		const FName ModuleFName = *ModuleInfo.ModuleName;
+		if (ensure(FModuleManager::Get().QueryModule(ModuleFName, ModuleStatus)))
+		{
+			// Compile the module that the class was added to so that the newly added class with appear in the Content Browser
+			TArray<UPackage*> PackagesToRebind;
+			if (ModuleStatus.bIsLoaded)
+			{
+				const bool bIsHotReloadable = FModuleManager::Get().DoesLoadedModuleHaveUObjects(ModuleFName);
+				if (bIsHotReloadable)
+				{
+					// Is there a UPackage with the same name as this module?
+					const FString PotentialPackageName = FString(TEXT("/Script/")) + ModuleInfo.ModuleName;
+					UPackage* Package = FindPackage(nullptr, *PotentialPackageName);
+					if (Package)
+					{
+						PackagesToRebind.Add(Package);
+					}
+				}
+			}
+
+			IHotReloadInterface& HotReloadSupport = FModuleManager::LoadModuleChecked<IHotReloadInterface>("HotReload");
+			if (PackagesToRebind.Num() > 0)
+			{
+				// Perform a hot reload
+				ECompilationResult::Type CompilationResult = HotReloadSupport.RebindPackages(PackagesToRebind, EHotReloadFlags::WaitForCompletion, *GWarn);
+				if (CompilationResult != ECompilationResult::Succeeded && CompilationResult != ECompilationResult::UpToDate)
+				{
+					OutFailReason = FText::Format(LOCTEXT("FailedToHotReloadModuleFmt", "Failed to automatically hot reload the '{0}' module."), FText::FromString(ModuleInfo.ModuleName));
+					return GameProjectUtils::EAddCodeToProjectResult::FailedToHotReload;
+				}
+			}
+			else
+			{
+				// Perform a regular unload, then reload
+				if (!HotReloadSupport.RecompileModule(ModuleFName, *GWarn, ERecompileModuleFlags::ReloadAfterRecompile))
+				{
+					OutFailReason = FText::Format(LOCTEXT("FailedToCompileModuleFmt", "Failed to automatically compile the '{0}' module."), FText::FromString(ModuleInfo.ModuleName));
+					return GameProjectUtils::EAddCodeToProjectResult::FailedToHotReload;
+				}
+			}
+		}
+		OutReloadStatus = GameProjectUtils::EReloadStatus::Reloaded;
+	}
+
+	return GameProjectUtils::EAddCodeToProjectResult::Succeeded;
 }
 
 

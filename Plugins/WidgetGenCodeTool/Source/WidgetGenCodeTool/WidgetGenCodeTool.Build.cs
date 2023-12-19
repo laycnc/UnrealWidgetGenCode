@@ -50,16 +50,15 @@ public class WidgetGenCodeTool : ModuleRules
 				"AppFramework",
 				"ToolWidgets",
 				"ContentBrowser",
+				"DesktopPlatform",
+				"SourceControl",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
 
-
-		DynamicallyLoadedModuleNames.AddRange(
-			new string[]
-			{
-				// ... add any modules that your module loads dynamically here ...
-			}
-			);
+		if (Target.bWithLiveCoding)
+		{
+			PrivateIncludePathModuleNames.Add("LiveCoding");
+		}
 	}
 }
