@@ -107,7 +107,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		return;
 	}
 
-	FScopedSlowTask SlowTask(7, LOCTEXT("AddingCodeToProject", "Adding code to project..."));
+	FScopedSlowTask SlowTask(9, LOCTEXT("AddingCodeToProject", "Adding code to project..."));
 	SlowTask.MakeDialog();
 
 	SlowTask.EnterProgressFrame();
@@ -115,6 +115,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 	TArray<FObjectProperty*> Propertys;
 	TArray<UClass*> PropertyClasses;
 	TArray<FString> PropertyHeaderFiles;
+	const bool bProjectHadCodeFiles = GameProjectUtils::ProjectHasCodeFiles();
 
 	WidgetGenCodeProjectUtils::GetPropertyInfos(WeakWidgetBlueprint.Get(), Propertys, PropertyClasses, PropertyHeaderFiles);
 
@@ -154,7 +155,7 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 
 	SlowTask.EnterProgressFrame();
 
-	TArray<FString> ClassSpecifierList;
+	FString OriginalAssetPath = WeakWidgetBlueprint->GetPackage()->GetName();
 
 	FText FailReason;
 
@@ -162,71 +163,91 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 
 	TArray<FString> CreatedFiles;
 
-	if (WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
-		*BaseClassInfo,
-		FNewClassInfo(WeakWidgetBlueprint->ParentClass),
-		ClassSpecifierList,
-		ClassProperties,
-		ClassForwardDeclaration,
-		SyncHeaderLocation,
-		FailReason
-	))
-	{
-		CreatedFiles.Add(BaseClassInfo->ClassSourcePath);
-	}
-	else
-	{
-		GameProjectUtils::DeleteCreatedFiles(BaseClassInfo->ClassHeaderPath, CreatedFiles);
+	auto GenClass = [&](const FWidgetGenClassInfomation& InClassInfo, UClass* ParentClass, const FString& InHeaderTemplate, const FString& InSourceTemplate) -> bool
+		{
 
-		// todo 失敗
-		return;
-	}
+			if (WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
+				InClassInfo,
+				FNewClassInfo(ParentClass),
+				InHeaderTemplate,
+				OriginalAssetPath,
+				ClassProperties,
+				ClassForwardDeclaration,
+				SyncHeaderLocation,
+				FailReason
+			))
+			{
+				CreatedFiles.Add(InClassInfo.ClassSourcePath);
+			}
+			else
+			{
+				GameProjectUtils::DeleteCreatedFiles(InClassInfo.ClassHeaderPath, CreatedFiles);
+				return false;
+			}
 
-	SlowTask.EnterProgressFrame();
+			SlowTask.EnterProgressFrame();
 
-	FString SyncSourceLocation;
-	if (WidgetGenCodeProjectUtils::GenerateClassSourceFile(
-		*BaseClassInfo,
-		FNewClassInfo(WeakWidgetBlueprint->ParentClass),
-		AdditionalIncludeDirectives,
-		ClassMemberInitialized,
-		SyncSourceLocation,
-		FailReason
-	))
-	{
-		 CreatedFiles.Add(BaseClassInfo->ClassSourcePath);
-	}
-	else
-	{
-		GameProjectUtils::DeleteCreatedFiles(BaseClassInfo->ClassSourcePath, CreatedFiles);
+			FString SyncSourceLocation;
+			if (WidgetGenCodeProjectUtils::GenerateClassSourceFile(
+				InClassInfo,
+				FNewClassInfo(ParentClass),
+				InSourceTemplate,
+				AdditionalIncludeDirectives,
+				ClassMemberInitialized,
+				SyncSourceLocation,
+				FailReason
+			))
+			{
+				CreatedFiles.Add(InClassInfo.ClassSourcePath);
+			}
+			else
+			{
+				GameProjectUtils::DeleteCreatedFiles(InClassInfo.ClassSourcePath, CreatedFiles);
+				return false;
+			}
 
-		// todo 失敗
-		return;
-	}
+			SlowTask.EnterProgressFrame();
 
-	SlowTask.EnterProgressFrame();
+			FText Failed;
+			auto Result = WidgetGenCodeProjectUtils::AddProjectFiles(CreatedFiles, bProjectHadCodeFiles, Failed, &SlowTask);
 
-	const bool bProjectHadCodeFiles = GameProjectUtils::ProjectHasCodeFiles();
+			if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
+			{
+				return false;
+			}
 
-	FText Failed;
-	auto Result = WidgetGenCodeProjectUtils::AddProjectFiles(CreatedFiles, bProjectHadCodeFiles, Failed, &SlowTask);
+			GameProjectUtils::EReloadStatus ReloadStatus;
+			Result = WidgetGenCodeProjectUtils::ProjectRecompileModule(InClassInfo.ClassModule, bProjectHadCodeFiles, ReloadStatus, Failed);
 
-	if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
-	{
-		return;
-	}
+			if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
+			{
+				return false;
+			}
 
-	GameProjectUtils::EReloadStatus ReloadStatus;
-	Result = WidgetGenCodeProjectUtils::ProjectRecompileModule(BaseClassInfo->ClassModule, bProjectHadCodeFiles, ReloadStatus, Failed);
+			return true;
+		};
 
-	if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
+
+	if (!GenClass(*BaseClassInfo, WeakWidgetBlueprint->ParentClass, TEXT("WidgetGenBaseClass.h.template"), TEXT("WidgetGenBaseClass.cpp.template")))
 	{
 		return;
 	}
 
 	FSoftClassPath ClassPath(FString::Printf(TEXT("/Script/%s.%s"), *BaseClassInfo->ClassModule.ModuleName, *BaseClassInfo->ClassName));
 
-	UClass* GenBaseClass =	ClassPath.TryLoadClass<UObject>();
+	UClass* GenBaseClass = ClassPath.TryLoadClass<UObject>();
+
+	if (!IsValid(GenBaseClass))
+	{
+		return;
+	}
+
+	if (!GenClass(*ImplmentClassInfo, GenBaseClass, TEXT("WidgetGenImplClass.h.template"), TEXT("WidgetGenImplClass.cpp.template")))
+	{
+		return;
+	}
+
+	//GameProjectUtils::AddCodeToProject(in)
 
 
 	int A = 0;

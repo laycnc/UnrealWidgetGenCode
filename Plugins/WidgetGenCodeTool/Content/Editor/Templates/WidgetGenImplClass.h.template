@@ -9,15 +9,11 @@
 
 %CLASS_FORWARD_DECLARATION%
 
-UCLASS(%UCLASS_SPECIFIER_LIST%)
+UCLASS(Blueprintable, meta = (WidgetGenImpl, WidgetGen = "%ORIGINAL_ASSET_PATH%"))
 class %CLASS_MODULE_API_MACRO%%PREFIXED_CLASS_NAME% : public %PREFIXED_BASE_CLASS_NAME%
 {
 	GENERATED_UCLASS_BODY()
 
 public:	
-	virtual bool Initialize() override;
 
-public:	
-
-	%CLASS_PROPERTIES%
 };

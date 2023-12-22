@@ -31,7 +31,8 @@ public:
 	static bool GenerateClassHeaderFile(
 		const FWidgetGenClassInfomation& ClassInfo,
 		const FNewClassInfo ParentClassInfo,
-		const TArray<FString>& ClassSpecifierList,
+		const FString& HeaderTemplateFile,
+		const FString& OOriginalAssetPath,
 		const FString& ClassProperties,
 		const FString& ClassForwardDeclaration,
 		FString& OutSyncLocation,
@@ -41,6 +42,7 @@ public:
 	static bool GenerateClassSourceFile(
 		const FWidgetGenClassInfomation& ClassInfo,
 		const FNewClassInfo ParentClassInfo,
+		const FString& SourceTemplateFile,
 		const FString& AdditionalIncludeDirectives,
 		const FString& ClassMemberInitialized,
 		FString& OutSyncLocation,

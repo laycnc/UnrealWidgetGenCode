@@ -392,7 +392,8 @@ void WidgetGenCodeProjectUtils::GetPropertyInfos(UWidgetBlueprint* InBlueprint, 
 bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 	const FWidgetGenClassInfomation& ClassInfo,
 	const FNewClassInfo ParentClassInfo,
-	const TArray<FString>& ClassSpecifierList,
+	const FString& HeaderTemplateFile,
+	const FString& OriginalAssetPath,
 	const FString& ClassProperties,
 	const FString& ClassForwardDeclaration,
 	FString& OutSyncLocation,
@@ -404,7 +405,7 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 
 	FString Template;
 
-	if (!ReadWidgetGenTemplateFile(TEXT("WidgetGenClass.h.template"), Template, OutFailReason))
+	if (!ReadWidgetGenTemplateFile(HeaderTemplateFile, Template, OutFailReason))
 	{
 		return false;
 	}
@@ -438,7 +439,7 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 	FString FinalOutput = Template.Replace(TEXT("%COPYRIGHT_LINE%"), *MakeCopyrightLine(), ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%UNPREFIXED_CLASS_NAME%"), *UnPrefixedClassName, ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%CLASS_MODULE_API_MACRO%"), *ModuleApiMacro, ESearchCase::CaseSensitive);
-	FinalOutput = FinalOutput.Replace(TEXT("%UCLASS_SPECIFIER_LIST%"), *GameProjectUtils::MakeCommaDelimitedList(ClassSpecifierList, false), ESearchCase::CaseSensitive);
+	FinalOutput = FinalOutput.Replace(TEXT("%ORIGINAL_ASSET_PATH%"), *OriginalAssetPath, ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%PREFIXED_CLASS_NAME%"), *PrefixedClassName, ESearchCase::CaseSensitive);
 	FinalOutput = FinalOutput.Replace(TEXT("%PREFIXED_BASE_CLASS_NAME%"), *PrefixedBaseClassName, ESearchCase::CaseSensitive);
 
@@ -462,6 +463,7 @@ bool WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
 bool WidgetGenCodeProjectUtils::GenerateClassSourceFile(
 	const FWidgetGenClassInfomation& ClassInfo,
 	const FNewClassInfo ParentClassInfo,
+	const FString& SourceTemplateFile,
 	const FString& AdditionalIncludeDirectives,
 	const FString& ClassMemberInitialized,
 	FString& OutSyncLocation,
@@ -473,7 +475,7 @@ bool WidgetGenCodeProjectUtils::GenerateClassSourceFile(
 
 	FString Template;
 
-	if (!ReadWidgetGenTemplateFile(TEXT("WidgetGenClass.cpp.template"), Template, OutFailReason))
+	if (!ReadWidgetGenTemplateFile(SourceTemplateFile, Template, OutFailReason))
 	{
 		return false;
 	}
@@ -764,7 +766,7 @@ GameProjectUtils::EAddCodeToProjectResult WidgetGenCodeProjectUtils::ProjectReco
 	const FModuleContextInfo& ModuleInfo,
 	bool bProjectHadCodeFiles,
 	GameProjectUtils::EReloadStatus& OutReloadStatus,
-	FText& OutFailReason)
+	FText& OutFailReason) 
 {
 #if WITH_LIVE_CODING
 	ILiveCodingModule* LiveCoding = FModuleManager::GetModulePtr<ILiveCodingModule>(LIVE_CODING_MODULE_NAME);
