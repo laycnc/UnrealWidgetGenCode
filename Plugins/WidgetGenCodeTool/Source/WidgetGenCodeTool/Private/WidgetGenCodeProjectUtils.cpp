@@ -4,7 +4,9 @@
 #include "GameProjectUtils.h"
 #include "ClassTemplateEditorSubsystem.h"
 #include "Editor.h"
+#include "BlueprintEditor.h"
 #include "GeneralProjectSettings.h"
+#include "Toolkits/ToolkitManager.h"
 
 #include "WidgetBlueprint.h"
 #include "Blueprint/WidgetTree.h"
@@ -858,6 +860,31 @@ GameProjectUtils::EAddCodeToProjectResult WidgetGenCodeProjectUtils::ProjectReco
 
 	return GameProjectUtils::EAddCodeToProjectResult::Succeeded;
 }
+
+
+TSharedPtr<FBlueprintEditor> WidgetGenCodeProjectUtils::GetBlueprintEditor(UWidgetBlueprint* WidgetBlueprint, bool bOpenEditor)
+{
+	check(WidgetBlueprint);
+
+	TSharedPtr<FBlueprintEditor> ResultEditor;
+	if (WidgetBlueprint != nullptr)
+	{
+		if (bOpenEditor)
+		{
+			// @todo toolkit major: Needs world-centric support
+			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(WidgetBlueprint);
+		}
+
+		TSharedPtr<IToolkit> FoundAssetEditor = FToolkitManager::Get().FindEditorForAsset(WidgetBlueprint);
+		// If we found a BlueprintEditor
+		if (FoundAssetEditor.IsValid())
+		{
+			ResultEditor = StaticCastSharedPtr<FBlueprintEditor>(FoundAssetEditor);
+		}
+	}
+	return ResultEditor;
+}
+
 
 
 #undef LOCTEXT_NAMESPACE

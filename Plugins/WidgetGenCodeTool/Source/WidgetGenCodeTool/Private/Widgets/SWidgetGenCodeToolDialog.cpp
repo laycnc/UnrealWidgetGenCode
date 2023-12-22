@@ -18,6 +18,8 @@
 #include "Framework/Notifications/NotificationManager.h"
 #include "WidgetBlueprint.h"
 #include "WidgetGenCodeProjectUtils.h"
+#include "BlueprintEditor.h"
+
 
 #define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
@@ -233,9 +235,9 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		return;
 	}
 
-	FSoftClassPath ClassPath(FString::Printf(TEXT("/Script/%s.%s"), *BaseClassInfo->ClassModule.ModuleName, *BaseClassInfo->ClassName));
+	FSoftClassPath GenBaseClassPath(FString::Printf(TEXT("/Script/%s.%s"), *BaseClassInfo->ClassModule.ModuleName, *BaseClassInfo->ClassName));
 
-	UClass* GenBaseClass = ClassPath.TryLoadClass<UObject>();
+	UClass* GenBaseClass = GenBaseClassPath.TryLoadClass<UObject>();
 
 	if (!IsValid(GenBaseClass))
 	{
@@ -247,8 +249,15 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		return;
 	}
 
-	//GameProjectUtils::AddCodeToProject(in)
+	FSoftClassPath GenImplClassPath(FString::Printf(TEXT("/Script/%s.%s"), *ImplmentClassInfo->ClassModule.ModuleName, *ImplmentClassInfo->ClassName));
 
+	UClass* GenImplClass = GenImplClassPath.TryLoadClass<UObject>();
+
+	if (auto BlueprintEditor = WidgetGenCodeProjectUtils::GetBlueprintEditor(WeakWidgetBlueprint.Get()))
+	{
+		BlueprintEditor->ReparentBlueprint_NewParentChosen(GenImplClass);
+		BlueprintEditor->RefreshEditors();
+	}
 
 	int A = 0;
 

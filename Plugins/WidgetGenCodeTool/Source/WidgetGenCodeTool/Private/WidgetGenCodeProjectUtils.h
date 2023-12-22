@@ -10,6 +10,7 @@
 class UWidgetBlueprint;
 struct FModuleContextInfo;
 struct FSlowTask;
+class FBlueprintEditor;
 
 struct FWidgetGenClassInfomation
 {
@@ -67,4 +68,6 @@ public:
 		GameProjectUtils::EReloadStatus& OutReloadStatus,
 		FText& OutFailReason);
 
+
+	static TSharedPtr<FBlueprintEditor> GetBlueprintEditor(UWidgetBlueprint* WidgetBlueprint, bool bOpenEditor = true);
 };
