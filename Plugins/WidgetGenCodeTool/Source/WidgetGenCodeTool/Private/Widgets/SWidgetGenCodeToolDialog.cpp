@@ -112,46 +112,17 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 	FScopedSlowTask SlowTask(9, LOCTEXT("AddingCodeToProject", "Adding code to project..."));
 	SlowTask.MakeDialog();
 
-	SlowTask.EnterProgressFrame();
-
-	TArray<FObjectProperty*> Propertys;
-	TArray<UClass*> PropertyClasses;
-	TArray<FString> PropertyHeaderFiles;
-	const bool bProjectHadCodeFiles = GameProjectUtils::ProjectHasCodeFiles();
-
-	WidgetGenCodeProjectUtils::GetPropertyInfos(WeakWidgetBlueprint.Get(), Propertys, PropertyClasses, PropertyHeaderFiles);
-
-	// クラスのプロパティをメンバーを初期化
 	FString ClassProperties;
-	for (const FObjectProperty* Property : Propertys)
-	{
-		ClassProperties += FString::Printf(TEXT("\tTWeakObjectPtr<U%s> %s;\r\n"),
-			*Property->PropertyClass->GetName(),
-			*Property->GetName()
-		);
-	}
-
-	// クラスのプロパティをメンバーを初期化
 	FString ClassForwardDeclaration;
-	for (const UClass* PropertyClass : PropertyClasses)
-	{
-		ClassForwardDeclaration += FString::Printf(TEXT("class U%s;\r\n"), *PropertyClass->GetName());
-	}
-
 	FString ClassMemberInitialized;
-	for (const FObjectProperty* Property : Propertys)
-	{
-		ClassMemberInitialized += FString::Printf(TEXT("\tSetProperty(TEXT(\"%s\"), %s);\r\n"),
-			*Property->GetName(),
-			*Property->GetName()
-		);
-	}
-
 	FString AdditionalIncludeDirectives;
-	for (const FString& HeaderFile : PropertyHeaderFiles)
-	{
-		AdditionalIncludeDirectives += FString::Printf(TEXT("#include \"%s\"\r\n"), *HeaderFile);
-	}
+
+	WidgetGenCodeProjectUtils::CreateBaseClassParam(
+		WeakWidgetBlueprint.Get(), 
+		ClassProperties,
+		ClassForwardDeclaration,
+		ClassMemberInitialized,
+		AdditionalIncludeDirectives);
 
 #if 1
 
@@ -160,77 +131,23 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 	FString OriginalAssetPath = WeakWidgetBlueprint->GetPackage()->GetName();
 
 	FText FailReason;
-
 	FString SyncHeaderLocation;
-
 	TArray<FString> CreatedFiles;
 
-	auto GenClass = [&](const FWidgetGenClassInfomation& InClassInfo, UClass* ParentClass, const FString& InHeaderTemplate, const FString& InSourceTemplate) -> bool
-		{
-
-			if (WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
-				InClassInfo,
-				FNewClassInfo(ParentClass),
-				InHeaderTemplate,
-				OriginalAssetPath,
-				ClassProperties,
-				ClassForwardDeclaration,
-				SyncHeaderLocation,
-				FailReason
-			))
-			{
-				CreatedFiles.Add(InClassInfo.ClassSourcePath);
-			}
-			else
-			{
-				GameProjectUtils::DeleteCreatedFiles(InClassInfo.ClassHeaderPath, CreatedFiles);
-				return false;
-			}
-
-			SlowTask.EnterProgressFrame();
-
-			FString SyncSourceLocation;
-			if (WidgetGenCodeProjectUtils::GenerateClassSourceFile(
-				InClassInfo,
-				FNewClassInfo(ParentClass),
-				InSourceTemplate,
-				AdditionalIncludeDirectives,
-				ClassMemberInitialized,
-				SyncSourceLocation,
-				FailReason
-			))
-			{
-				CreatedFiles.Add(InClassInfo.ClassSourcePath);
-			}
-			else
-			{
-				GameProjectUtils::DeleteCreatedFiles(InClassInfo.ClassSourcePath, CreatedFiles);
-				return false;
-			}
-
-			SlowTask.EnterProgressFrame();
-
-			FText Failed;
-			auto Result = WidgetGenCodeProjectUtils::AddProjectFiles(CreatedFiles, bProjectHadCodeFiles, Failed, &SlowTask);
-
-			if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
-			{
-				return false;
-			}
-
-			GameProjectUtils::EReloadStatus ReloadStatus;
-			Result = WidgetGenCodeProjectUtils::ProjectRecompileModule(InClassInfo.ClassModule, bProjectHadCodeFiles, ReloadStatus, Failed);
-
-			if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
-			{
-				return false;
-			}
-
-			return true;
-		};
-
-
-	if (!GenClass(*BaseClassInfo, WeakWidgetBlueprint->ParentClass, TEXT("WidgetGenBaseClass.h.template"), TEXT("WidgetGenBaseClass.cpp.template")))
+	if (!WidgetGenCodeProjectUtils::GenerateClass(
+		*BaseClassInfo,
+		WeakWidgetBlueprint->ParentClass, 
+		OriginalAssetPath,
+		ClassProperties,
+		ClassForwardDeclaration,
+		AdditionalIncludeDirectives,
+		ClassMemberInitialized,
+		TEXT("WidgetGenBaseClass.h.template"),
+		TEXT("WidgetGenBaseClass.cpp.template"),
+		SyncHeaderLocation, 
+		FailReason, 
+		CreatedFiles,
+		&SlowTask))
 	{
 		return;
 	}
@@ -244,7 +161,20 @@ void SWidgetGenCodeToolDialog::FinishClicked()
 		return;
 	}
 
-	if (!GenClass(*ImplmentClassInfo, GenBaseClass, TEXT("WidgetGenImplClass.h.template"), TEXT("WidgetGenImplClass.cpp.template")))
+	if (!WidgetGenCodeProjectUtils::GenerateClass(
+		*ImplmentClassInfo,
+		GenBaseClass,
+		OriginalAssetPath,
+		ClassProperties,
+		ClassForwardDeclaration,
+		AdditionalIncludeDirectives,
+		ClassMemberInitialized,
+		TEXT("WidgetGenImplClass.h.template"),
+		TEXT("WidgetGenImplClass.cpp.template"),
+		SyncHeaderLocation,
+		FailReason,
+		CreatedFiles,
+		&SlowTask))
 	{
 		return;
 	}

@@ -25,9 +25,39 @@ struct WidgetGenCodeProjectUtils
 {
 public:
 
-	static bool GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprint, FWidgetGenClassInfomation& OutBaseClassInfo, FWidgetGenClassInfomation& OutImplmentClassInfo);
+	static bool GenWidgetWidgetInfo(
+		UWidgetBlueprint* InBlueprint,
+		FWidgetGenClassInfomation& OutBaseClassInfo, 
+		FWidgetGenClassInfomation& OutImplmentClassInfo,
+		UClass*& OutOriginalBaseClass,
+		bool& OutGenCodeFileExists);
 
 	static void GetPropertyInfos(UWidgetBlueprint* InBlueprint, TArray<FObjectProperty*>& OutPropertys, TArray<UClass*>& OutPropertyClasses, TArray<FString>& OutPropertyHeaderFiles);
+
+
+	static void CreateBaseClassParam(
+		UWidgetBlueprint* InBlueprint,
+		FString& ClassProperties,
+		FString& ClassForwardDeclaration,
+		FString& ClassMemberInitialized,
+		FString& AdditionalIncludeDirectives
+	);
+
+	static bool GenerateClass(
+		const FWidgetGenClassInfomation& InClassInfo,
+		UClass* ParentClass,
+		const FString& OriginalAssetPath,
+		const FString& ClassProperties,
+		const FString& ClassForwardDeclaration,
+		const FString& AdditionalIncludeDirectives,
+		const FString& ClassMemberInitialized,
+		const FString& InHeaderTemplate, 
+		const FString& InSourceTemplate,
+		FString& OutSyncLocation,
+		FText& OutFailReason,
+		TArray<FString>& OutCreatedFiles,
+		FSlowTask* SlowTask = nullptr
+		);
 
 	static bool GenerateClassHeaderFile(
 		const FWidgetGenClassInfomation& ClassInfo,

@@ -14,6 +14,7 @@
 #include "Animation/WidgetAnimation.h"
 
 #include "WidgetGenCodeProjectUtils.h"
+#include "Misc/ScopedSlowTask.h"
 
 #define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
 
@@ -82,9 +83,63 @@ void FWidgetGenCodeToolModule::OnPluginAction(UWidgetBlueprint* InBlueprint)
 {
 	FWidgetGenClassInfomation BaseClassInfo;
 	FWidgetGenClassInfomation ImplmentClassInfo;
+	bool bGenCodeFileExists = false;
+	UClass* OriginalBaseClass = nullptr;
 
-	if (!WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(InBlueprint, BaseClassInfo, ImplmentClassInfo))
+	if (!WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(InBlueprint, BaseClassInfo, ImplmentClassInfo, OriginalBaseClass, bGenCodeFileExists))
 	{
+		return;
+	}
+
+	if (bGenCodeFileExists)
+	{
+		FScopedSlowTask SlowTask(9, LOCTEXT("AddingCodeToProject", "Adding code to project..."));
+		SlowTask.MakeDialog();
+
+		FText FailReason;
+		FString SyncHeaderLocation;
+		TArray<FString> CreatedFiles;
+
+		CreatedFiles.Add(BaseClassInfo.ClassHeaderPath);
+		CreatedFiles.Add(BaseClassInfo.ClassSourcePath);
+		GameProjectUtils::DeleteCreatedFiles(BaseClassInfo.ClassModule.ModuleSourcePath, CreatedFiles);
+
+		CreatedFiles.Empty();
+
+		// 既にファイルが存在する場合
+		const FString OriginalAssetPath = InBlueprint->GetPackage()->GetName();
+
+		FString ClassProperties;
+		FString ClassForwardDeclaration;
+		FString ClassMemberInitialized;
+		FString AdditionalIncludeDirectives;
+
+		WidgetGenCodeProjectUtils::CreateBaseClassParam(
+			InBlueprint,
+			ClassProperties,
+			ClassForwardDeclaration,
+			ClassMemberInitialized,
+			AdditionalIncludeDirectives);
+
+
+		if (!WidgetGenCodeProjectUtils::GenerateClass(
+			BaseClassInfo,
+			OriginalBaseClass,
+			OriginalAssetPath,
+			ClassProperties,
+			ClassForwardDeclaration,
+			AdditionalIncludeDirectives,
+			ClassMemberInitialized,
+			TEXT("WidgetGenBaseClass.h.template"),
+			TEXT("WidgetGenBaseClass.cpp.template"),
+			SyncHeaderLocation,
+			FailReason,
+			CreatedFiles,
+			&SlowTask))
+		{
+			return;
+		}
+
 		return;
 	}
 

@@ -244,12 +244,19 @@ namespace
 
 }
 
-bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprint, FWidgetGenClassInfomation& OutBaseClassInfo, FWidgetGenClassInfomation& OutImplmentClassInfo)
+bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(
+	UWidgetBlueprint* InBlueprint,
+	FWidgetGenClassInfomation& OutBaseClassInfo,
+	FWidgetGenClassInfomation& OutImplmentClassInfo,
+	UClass*& OutOriginalBaseClass,
+	bool& OutGenCodeFileExists)
 {
+	OutGenCodeFileExists = false;
 	FString BlueprintClassName = InBlueprint->GeneratedClass->GetName();
 	BlueprintClassName.RemoveFromEnd(TEXT("_C"));
 
 	UClass* ParentClass = InBlueprint->ParentClass;
+	OutOriginalBaseClass = OutOriginalBaseClass;
 
 	// 一番新しいネイティブクラスが対象
 	while (IsValid(ParentClass) && !ParentClass->IsNative())
@@ -297,7 +304,7 @@ bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprin
 				return NullOpt;
 			};
 
-		if (WidgetGenImplClass->HasMetaData(TEXT("WidgetGenImpl")) && WidgetGenBaseClass->HasMetaData(TEXT("WidgetGenImpl")))
+		if (WidgetGenImplClass->HasMetaData(TEXT("WidgetGenImpl")) && WidgetGenBaseClass->HasMetaData(TEXT("WidgetGenBase")))
 		{
 			const FString WidgetGenImplModuleName = WidgetGenImplClass->GetOutermost()->GetName().RightChop(FString(TEXT("/Script/")).Len());
 			const FString WidgetGenBaseModuleName = WidgetGenBaseClass->GetOutermost()->GetName().RightChop(FString(TEXT("/Script/")).Len());
@@ -309,6 +316,7 @@ bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprin
 				return false;
 			}
 
+			OutOriginalBaseClass = WidgetGenBaseClass->GetSuperClass();
 			OutBaseClassInfo.ClassName = WidgetGenBaseClass->GetName();
 			OutImplmentClassInfo.ClassName = WidgetGenImplClass->GetName();
 			OutBaseClassInfo.ClassModule = *WidgetGenBaseModule;
@@ -316,6 +324,13 @@ bool WidgetGenCodeProjectUtils::GenWidgetWidgetInfo(UWidgetBlueprint* InBlueprin
 			OutBaseClassInfo.ClassPath = WidgetGenBaseModule->ModuleSourcePath;
 			OutImplmentClassInfo.ClassPath = WidgetGenImplModule->ModuleSourcePath;
 
+			FSourceCodeNavigation::FindClassHeaderPath(WidgetGenBaseClass, OutBaseClassInfo.ClassHeaderPath);
+			FSourceCodeNavigation::FindClassSourcePath(WidgetGenBaseClass, OutBaseClassInfo.ClassSourcePath);
+
+			FSourceCodeNavigation::FindClassHeaderPath(WidgetGenImplClass, OutImplmentClassInfo.ClassHeaderPath);
+			FSourceCodeNavigation::FindClassSourcePath(WidgetGenImplClass, OutImplmentClassInfo.ClassSourcePath);
+
+			OutGenCodeFileExists = true;
 			return true;
 		}
 		return false;
@@ -388,6 +403,135 @@ void WidgetGenCodeProjectUtils::GetPropertyInfos(UWidgetBlueprint* InBlueprint, 
 			}
 		}
 	}
+}
+
+
+void WidgetGenCodeProjectUtils::CreateBaseClassParam(
+	UWidgetBlueprint* InBlueprint,
+	FString& ClassProperties,
+	FString& ClassForwardDeclaration,
+	FString& ClassMemberInitialized,
+	FString& AdditionalIncludeDirectives
+)
+{
+	TArray<FObjectProperty*> Propertys;
+	TArray<UClass*> PropertyClasses;
+	TArray<FString> PropertyHeaderFiles;
+
+	WidgetGenCodeProjectUtils::GetPropertyInfos(InBlueprint, Propertys, PropertyClasses, PropertyHeaderFiles);
+
+	// クラスのプロパティをメンバーを初期化
+	for (const FObjectProperty* Property : Propertys)
+	{
+		ClassProperties += FString::Printf(TEXT("\tTWeakObjectPtr<U%s> %s;\r\n"),
+			*Property->PropertyClass->GetName(),
+			*Property->GetName()
+		);
+	}
+
+	// クラスのプロパティをメンバーを初期化
+	for (const UClass* PropertyClass : PropertyClasses)
+	{
+		ClassForwardDeclaration += FString::Printf(TEXT("class U%s;\r\n"), *PropertyClass->GetName());
+	}
+
+	for (const FObjectProperty* Property : Propertys)
+	{
+		ClassMemberInitialized += FString::Printf(TEXT("\tSetProperty(TEXT(\"%s\"), %s);\r\n"),
+			*Property->GetName(),
+			*Property->GetName()
+		);
+	}
+
+	for (const FString& HeaderFile : PropertyHeaderFiles)
+	{
+		AdditionalIncludeDirectives += FString::Printf(TEXT("#include \"%s\"\r\n"), *HeaderFile);
+	}
+
+}
+
+bool WidgetGenCodeProjectUtils::GenerateClass(
+	const FWidgetGenClassInfomation& InClassInfo,
+	UClass* ParentClass,
+	const FString& OriginalAssetPath,
+	const FString& ClassProperties,
+	const FString& ClassForwardDeclaration,
+	const FString& AdditionalIncludeDirectives,
+	const FString& ClassMemberInitialized,
+	const FString& InHeaderTemplate,
+	const FString& InSourceTemplate,
+	FString& OutSyncLocation,
+	FText& OutFailReason,
+	TArray<FString>& OutCreatedFiles,
+	FSlowTask* SlowTask)
+{
+	if (WidgetGenCodeProjectUtils::GenerateClassHeaderFile(
+		InClassInfo,
+		FNewClassInfo(ParentClass),
+		InHeaderTemplate,
+		OriginalAssetPath,
+		ClassProperties,
+		ClassForwardDeclaration,
+		OutSyncLocation,
+		OutFailReason
+	))
+	{
+		OutCreatedFiles.Add(InClassInfo.ClassSourcePath);
+	}
+	else
+	{
+		GameProjectUtils::DeleteCreatedFiles(InClassInfo.ClassHeaderPath, OutCreatedFiles);
+		return false;
+	}
+
+	if (SlowTask)
+	{
+		SlowTask->EnterProgressFrame();
+	}
+
+	FString SyncSourceLocation;
+	if (WidgetGenCodeProjectUtils::GenerateClassSourceFile(
+		InClassInfo,
+		FNewClassInfo(ParentClass),
+		InSourceTemplate,
+		AdditionalIncludeDirectives,
+		ClassMemberInitialized,
+		OutSyncLocation,
+		OutFailReason
+	))
+	{
+		OutCreatedFiles.Add(InClassInfo.ClassSourcePath);
+	}
+	else
+	{
+		GameProjectUtils::DeleteCreatedFiles(InClassInfo.ClassSourcePath, OutCreatedFiles);
+		return false;
+	}
+
+	if (SlowTask)
+	{
+		SlowTask->EnterProgressFrame();
+	}
+
+	const bool bProjectHadCodeFiles = GameProjectUtils::ProjectHasCodeFiles();
+
+	FText Failed;
+	auto Result = WidgetGenCodeProjectUtils::AddProjectFiles(OutCreatedFiles, bProjectHadCodeFiles, Failed, SlowTask);
+
+	if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
+	{
+		return false;
+	}
+
+	GameProjectUtils::EReloadStatus ReloadStatus;
+	Result = WidgetGenCodeProjectUtils::ProjectRecompileModule(InClassInfo.ClassModule, bProjectHadCodeFiles, ReloadStatus, Failed);
+
+	if (Result != GameProjectUtils::EAddCodeToProjectResult::Succeeded)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -768,7 +912,7 @@ GameProjectUtils::EAddCodeToProjectResult WidgetGenCodeProjectUtils::ProjectReco
 	const FModuleContextInfo& ModuleInfo,
 	bool bProjectHadCodeFiles,
 	GameProjectUtils::EReloadStatus& OutReloadStatus,
-	FText& OutFailReason) 
+	FText& OutFailReason)
 {
 #if WITH_LIVE_CODING
 	ILiveCodingModule* LiveCoding = FModuleManager::GetModulePtr<ILiveCodingModule>(LIVE_CODING_MODULE_NAME);
