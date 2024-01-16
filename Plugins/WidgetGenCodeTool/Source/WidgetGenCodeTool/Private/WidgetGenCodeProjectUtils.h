@@ -79,13 +79,6 @@ public:
 		FString& OutSyncLocation,
 		FText& OutFailReason);
 
-
-#if 0
-
-	static GameProjectUtils::EAddCodeToProjectResult AddCodeToProject_Internal(const FString& NewClassName, const FString& NewClassPath, const FModuleContextInfo& ModuleInfo, const FNewClassInfo ParentClassInfo, const TSet<FString>& DisallowedHeaderNames, FString& OutHeaderFilePath, FString& OutCppFilePath, FText& OutFailReason, GameProjectUtils::EReloadStatus& OutReloadStatus);
-
-#endif
-
 	static GameProjectUtils::EAddCodeToProjectResult AddProjectFiles(
 		const TArray<FString>& CreatedFiles,
 		bool bProjectHadCodeFiles,
