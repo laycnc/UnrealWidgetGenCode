@@ -20,5 +20,11 @@
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit"
 		}
+	],
+	"LocalizationTargets": [
+		{
+			"Name": "WidgetGenCodeTool",
+			"LoadingPolicy": "Always"
+		}
 	]
 }
