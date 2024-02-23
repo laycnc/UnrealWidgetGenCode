@@ -31,7 +31,7 @@
 #include "SWarningOrErrorBox.h"
 #include "WidgetGenCodeProjectUtils.h"
 
-#define LOCTEXT_NAMESPACE "GameProjectGeneration"
+#define LOCTEXT_NAMESPACE "WidgetGenCodeTool"
 
 /** The last selected module name. Meant to keep the same module selected after first selection */
 FString SWidgetGenClassInfo::LastSelectedModuleName;

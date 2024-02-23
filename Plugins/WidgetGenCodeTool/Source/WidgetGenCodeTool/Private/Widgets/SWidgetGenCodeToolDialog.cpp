@@ -21,7 +21,7 @@
 #include "BlueprintEditor.h"
 
 
-#define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
+#define LOCTEXT_NAMESPACE "WidgetGenCodeTool"
 
 void SWidgetGenCodeToolDialog::Construct(const FArguments& InArgs)
 {

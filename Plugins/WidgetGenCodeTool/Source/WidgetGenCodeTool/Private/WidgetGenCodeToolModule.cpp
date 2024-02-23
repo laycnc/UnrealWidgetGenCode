@@ -16,7 +16,7 @@
 #include "WidgetGenCodeProjectUtils.h"
 #include "Misc/ScopedSlowTask.h"
 
-#define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
+#define LOCTEXT_NAMESPACE "WidgetGenCodeTool"
 
 void FWidgetGenCodeToolModule::StartupModule()
 {

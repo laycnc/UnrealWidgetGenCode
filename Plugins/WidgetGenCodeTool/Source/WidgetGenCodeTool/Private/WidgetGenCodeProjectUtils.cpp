@@ -25,7 +25,7 @@
 #include "ILiveCodingModule.h"
 #endif
 
-#define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
+#define LOCTEXT_NAMESPACE "WidgetGenCodeTool"
 
 namespace
 {
