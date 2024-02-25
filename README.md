@@ -11,10 +11,9 @@ The goal of this plugin is to eliminate this implementation effort by generating
 
 # Example of code generation
 
-! [UMGDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/UMGDesigner.png?token=GHSAT0 AAAAAACN37UJTOE7ZOUUJH65SWURSZO257AQ)
+![UMGDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/UMGDesigner.png)
 
-! [BlueprintDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/BlueprintDesigner.png? token=GHSAT0AAAAAAAACN37UJSALFL765JZQR64J42ZO256LA)
-
+![BlueprintDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/BlueprintDesigner.png)
 
 ## Parts of UMG
 

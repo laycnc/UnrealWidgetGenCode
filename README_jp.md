@@ -7,9 +7,9 @@ C++からリフレクションを使って取得するか、Blueprint側から�
 
 # 生成例
 
-![UMGDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/UMGDesigner.png?token=GHSAT0AAAAAACN37UJTOE7ZOUUJH65SWURSZO257AQ)
+![UMGDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/UMGDesigner.png)
 
-![BlueprintDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/BlueprintDesigner.png?token=GHSAT0AAAAAACN37UJSALFL765JZQR64J42ZO256LA)
+![BlueprintDesigner](https://raw.githubusercontent.com/laycnc/UnrealWidgetGenCode/documents/Documents/Image/BlueprintDesigner.png)
 
 
 ## UMGのパーツ
