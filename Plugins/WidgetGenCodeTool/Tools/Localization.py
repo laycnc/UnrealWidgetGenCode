@@ -1,7 +1,10 @@
 import os
 import json
-from typing import Optional, TypedDict, List
 import winreg
+import argparse
+import subprocess
+import BuildHelper
+from typing import Optional, TypedDict, List
 
 class UnrealModule(TypedDict):
 	Name: str
@@ -60,3 +63,24 @@ def GetEngineDir(InPrpjectDir: str) -> Optional[str]:
 
 	return None
 pass
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("ConfigFile", type=str, default="WidgetGenCodeTool")
+args = parser.parse_args()
+ConfigFile: str = args.ConfigFile
+
+
+ProjectFilePath = BuildHelper.GetProjectFilePath()
+
+if ProjectFilePath == None:
+	os.abort()
+
+InstalledDirectory = BuildHelper.GetEngineDir(ProjectFilePath)
+
+if InstalledDirectory == None:
+	os.abort()
+pass
+
+UnrealEditorCmd: str = f"{InstalledDirectory}/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
+subprocess.run(f"{UnrealEditorCmd} {ProjectFilePath} -run=GatherText -config=Plugins/WidgetGenCodeTool/Config/Localization/{ConfigFile}.ini")
