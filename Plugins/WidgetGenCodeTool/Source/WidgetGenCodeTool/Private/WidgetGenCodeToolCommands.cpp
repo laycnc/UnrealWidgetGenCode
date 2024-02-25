@@ -2,7 +2,7 @@
 
 #include "WidgetGenCodeToolCommands.h"
 
-#define LOCTEXT_NAMESPACE "FWidgetGenCodeToolModule"
+#define LOCTEXT_NAMESPACE "WidgetGenCodeTool"
 
 void FWidgetGenCodeToolCommands::RegisterCommands()
 {

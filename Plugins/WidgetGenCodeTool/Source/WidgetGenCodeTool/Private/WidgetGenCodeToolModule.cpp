@@ -74,7 +74,9 @@ void FWidgetGenCodeToolModule::OnToolBarExtension(FToolBarBuilder& InBuilder, UW
 		InBuilder.AddToolBarButton(
 			FUIAction(FExecuteAction::CreateRaw(this, &FWidgetGenCodeToolModule::OnPluginAction, InBlueprint)),
 			NAME_None,
-			LOCTEXT("OpenDialog", "Open Dialog"));
+			LOCTEXT("WidgetGenCode", "Widget Gen Code"),
+			LOCTEXT("WidgetGenCodeTooltip", "Generate C++ code from Widget")
+			);
 	}
 	InBuilder.EndSection();
 }
@@ -146,7 +148,7 @@ void FWidgetGenCodeToolModule::OnPluginAction(UWidgetBlueprint* InBlueprint)
 	// If we've been given a class then we only show the second page of the dialog, so we can make the window smaller as that page doesn't have as much content
 	const FVector2D WindowSize = FVector2D(940, 480);
 
-	FText WindowTitle = LOCTEXT("AddCodeWindowHeader_Blueprint", "Add Blueprint Class");
+	FText WindowTitle = LOCTEXT("AddCodeWindowHeader_GenWidgetCode", "Add Generated Widget Code Class");
 
 	TSharedRef<SWindow> AddCodeWindow =
 		SNew(SWindow)
