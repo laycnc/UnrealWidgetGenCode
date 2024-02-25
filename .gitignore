@@ -3,6 +3,8 @@
 .vscode/
 /Content/
 
+**/__pycache__/
+
 # Compiled Object files
 *.slo
 *.lo
