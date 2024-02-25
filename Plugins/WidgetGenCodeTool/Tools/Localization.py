@@ -3,7 +3,6 @@ import json
 import winreg
 import argparse
 import subprocess
-import BuildHelper
 from typing import Optional, TypedDict, List
 
 class UnrealModule(TypedDict):
@@ -71,12 +70,12 @@ args = parser.parse_args()
 ConfigFile: str = args.ConfigFile
 
 
-ProjectFilePath = BuildHelper.GetProjectFilePath()
+ProjectFilePath = GetProjectFilePath()
 
 if ProjectFilePath == None:
 	os.abort()
 
-InstalledDirectory = BuildHelper.GetEngineDir(ProjectFilePath)
+InstalledDirectory = GetEngineDir(ProjectFilePath)
 
 if InstalledDirectory == None:
 	os.abort()

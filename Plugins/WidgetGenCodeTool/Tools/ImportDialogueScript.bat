@@ -1,2 +1,1 @@
-
-python.exe ./Localization.py -ConfigFile="WidgetGenCodeTool_ImportDialogueScript"
+python.exe ./Localization.py "WidgetGenCodeTool_ImportDialogueScript"

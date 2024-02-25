@@ -1,2 +1,1 @@
-
-python.exe ./Localization.py -ConfigFile="WidgetGenCodeTool_Gather"
+python.exe ./Localization.py "WidgetGenCodeTool_Gather"
